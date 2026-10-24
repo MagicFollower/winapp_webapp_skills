@@ -1,0 +1,364 @@
+/* Element Plus 设计层
+ * 加载顺序：element-plus/dist/index.css -> dark/css-vars.css -> 本文件
+ * 本文件只做三件事：4dp 间距、统一圆角档、G2 角形；不改 Element Plus 的组件结构。
+ */
+
+:root {
+  /* 间距：作者层只用这 9 档 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* 圆角档：G2 只换曲率族，不换半径 */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+
+  /* Element Plus 半径桥接 */
+  --el-border-radius-small: var(--radius-xs);
+  --el-border-radius-base: var(--radius-sm);
+  --el-border-radius-round: var(--radius-pill);
+  --el-border-radius-circle: 50%;
+
+  /* 字体 */
+  --el-font-family: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --text-display-size: 32px;  --text-display-line: 40px;  --text-display-weight: 700;
+  --text-h1-size: 24px;       --text-h1-line: 32px;       --text-h1-weight: 600;
+  --text-h2-size: 20px;       --text-h2-line: 28px;       --text-h2-weight: 600;
+  --text-h3-size: 16px;       --text-h3-line: 24px;       --text-h3-weight: 600;
+  --text-body-size: 14px;     --text-body-line: 22px;     --text-body-weight: 400;
+  --text-caption-size: 12px;  --text-caption-line: 18px;  --text-caption-weight: 400;
+
+  /* G2 默认档：squircle = superellipse(2) = p4 */
+  --g2-shape: squircle;
+
+  /* 动效：全项目只这三档时长、三档曲线 */
+  --motion-duration-fast: 160ms;
+  --motion-duration-base: 220ms;
+  --motion-duration-slow: 320ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --motion-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+
+  /* Element Plus 自身的展开/淡入也跟随同一节奏 */
+  --el-transition-duration: var(--motion-duration-base);
+  --el-transition-duration-fast: var(--motion-duration-fast);
+
+  /* 卡片优先：所有区块默认落在卡片表面上 */
+  --ds-card-bg: var(--el-bg-color);
+  --ds-card-border: var(--el-border-color-lighter);
+  --ds-card-radius: var(--radius-md);
+  --ds-card-padding: var(--space-4);
+}
+
+html,
+body {
+  margin: 0;
+}
+
+/* 卡片优先的底：页面用 page 色，卡片用 bg 色，静态卡片才有边界 */
+body {
+  background: var(--el-bg-color-page);
+  color: var(--el-text-color-primary);
+  font-family: var(--el-font-family);
+}
+
+/* 组件内部间距归一化。变量声明在组件自身，必须命中组件选择器，写在 :root 无效。 */
+.el-card {
+  --el-card-padding: var(--ds-card-padding);
+  --el-card-border-radius: var(--ds-card-radius);
+  border-color: var(--ds-card-border);
+}
+.el-card.is-always-shadow {
+  box-shadow: var(--el-box-shadow-lighter);
+}
+.el-form-item {
+  --el-form-item-margin-bottom: var(--space-4);
+}
+.el-form-item:last-child {
+  margin-bottom: 0;
+}
+.el-dialog {
+  --el-dialog-padding-primary: var(--space-6);
+  --el-dialog-border-radius: var(--radius-lg);
+}
+.el-drawer {
+  --el-drawer-padding-primary: var(--space-6);
+}
+.el-message-box {
+  --el-messagebox-border-radius: var(--radius-lg);
+}
+.el-popover {
+  --el-popover-border-radius: var(--radius-sm);
+}
+.el-popper {
+  --el-popper-border-radius: var(--radius-sm);
+}
+.el-pagination {
+  --el-pagination-border-radius: var(--radius-xs);
+}
+.el-message {
+  --el-message-padding: 12px 16px;
+}
+.el-notification {
+  --el-notification-padding: 16px 24px 16px 16px;
+  --el-notification-radius: var(--radius-sm);
+}
+.el-table .cell {
+  padding: 0 var(--space-4);
+}
+
+/* 布局工具类 */
+.ds-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1040px;
+  margin-inline: auto;
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-6);
+}
+.ds-page--wide { max-width: 1440px; }
+.ds-page--reading { max-width: 840px; }
+@media (min-width: 600px) {
+  .ds-page { padding: var(--space-6); }
+}
+
+.ds-stack { display: grid; gap: var(--space-4); }
+.ds-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.ds-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.ds-actions .el-button + .el-button,
+.el-dialog__footer .el-button + .el-button {
+  margin-left: 0;
+}
+.el-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ds-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+@media (min-width: 840px) {
+  .ds-card-grid { gap: var(--space-6); }
+}
+
+/* 卡片优先：非 el-card 的容器也落在同一表面上 */
+.ds-card {
+  box-sizing: border-box;
+  padding: var(--ds-card-padding);
+  background: var(--ds-card-bg);
+  border: 1px solid var(--ds-card-border);
+  border-radius: var(--ds-card-radius);
+  box-shadow: none;
+}
+.ds-card--raised { box-shadow: var(--el-box-shadow-lighter); }
+
+/* 数据页 Grid：工具栏、表格、分页同属一个网格；分页固定右下角 */
+.ds-data-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  min-width: 0;
+}
+.ds-data-grid > .el-pagination,
+.ds-data-grid__pager {
+  justify-self: end;
+  align-self: end;
+}
+
+.ds-form { max-width: 560px; }
+.ds-reading { max-width: 840px; }
+.ds-touch { min-height: 48px; }
+
+.ds-display { font-size: var(--text-display-size); line-height: var(--text-display-line); font-weight: var(--text-display-weight); margin: 0; }
+.ds-h1 { font-size: var(--text-h1-size); line-height: var(--text-h1-line); font-weight: var(--text-h1-weight); margin: 0; }
+.ds-h2 { font-size: var(--text-h2-size); line-height: var(--text-h2-line); font-weight: var(--text-h2-weight); margin: 0; }
+.ds-h3 { font-size: var(--text-h3-size); line-height: var(--text-h3-line); font-weight: var(--text-h3-weight); margin: 0; }
+.ds-body { font-size: var(--text-body-size); line-height: var(--text-body-line); font-weight: var(--text-body-weight); }
+.ds-caption { font-size: var(--text-caption-size); line-height: var(--text-caption-line); font-weight: var(--text-caption-weight); color: var(--el-text-color-secondary); }
+.ds-muted { color: var(--el-text-color-secondary); }
+
+/* 顶部提示条：info / warn / error 三态，颜色全部来自主题变量 */
+.el-message.ds-toast {
+  --el-message-padding: 12px 16px;
+  --el-message-text-color: var(--el-text-color-primary);
+  --el-message-close-icon-color: var(--el-text-color-secondary);
+  --el-message-close-hover-color: var(--el-text-color-primary);
+  width: fit-content;
+  min-width: 280px;
+  max-width: min(480px, calc(100vw - var(--space-8)));
+  border-radius: var(--radius-sm);
+  box-shadow: var(--el-box-shadow-light);
+}
+.el-message.ds-toast--info {
+  --el-message-bg-color: var(--el-color-info-light-9);
+  --el-message-border-color: var(--el-color-info-light-7);
+}
+.el-message.ds-toast--warn {
+  --el-message-bg-color: var(--el-color-warning-light-9);
+  --el-message-border-color: var(--el-color-warning-light-7);
+}
+.el-message.ds-toast--error {
+  --el-message-bg-color: var(--el-color-error-light-9);
+  --el-message-border-color: var(--el-color-error-light-7);
+}
+.el-message.ds-toast--info .el-message__icon { color: var(--el-color-info-dark-2); }
+.el-message.ds-toast--warn .el-message__icon { color: var(--el-color-warning-dark-2); }
+.el-message.ds-toast--error .el-message__icon { color: var(--el-color-error-dark-2); }
+
+/* 页面 / 组件切换：只动 opacity 与 transform，不动布局属性 */
+.ds-page-enter-active,
+.ds-page-leave-active,
+.ds-fade-enter-active,
+.ds-fade-leave-active {
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+.ds-page-enter-active,
+.ds-page-leave-active {
+  transition-property: opacity, transform;
+}
+.ds-page-enter-from,
+.ds-page-leave-to,
+.ds-fade-enter-from,
+.ds-fade-leave-to {
+  opacity: 0;
+}
+.ds-page-enter-from {
+  transform: translateY(var(--space-2));
+}
+.ds-page-leave-to {
+  transform: translateY(calc(var(--space-1) * -1));
+}
+
+.ds-slide-up-enter-active {
+  transition: opacity var(--motion-duration-base) var(--motion-ease-emphasized),
+    transform var(--motion-duration-base) var(--motion-ease-emphasized);
+}
+.ds-slide-up-leave-active {
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-exit),
+    transform var(--motion-duration-fast) var(--motion-ease-exit);
+}
+.ds-slide-up-enter-from {
+  opacity: 0;
+  transform: translateY(var(--space-2));
+}
+.ds-slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(calc(var(--space-1) * -1));
+}
+
+.ds-scale-fade-enter-active {
+  transition: opacity var(--motion-duration-base) var(--motion-ease-emphasized),
+    transform var(--motion-duration-base) var(--motion-ease-emphasized);
+}
+.ds-scale-fade-leave-active {
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-exit),
+    transform var(--motion-duration-fast) var(--motion-ease-exit);
+}
+.ds-scale-fade-enter-from {
+  opacity: 0;
+  transform: scale(0.96);
+}
+.ds-scale-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.ds-list { position: relative; }
+.ds-list-move,
+.ds-list-enter-active,
+.ds-list-leave-active {
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard),
+    transform var(--motion-duration-base) var(--motion-ease-standard);
+}
+.ds-list-enter-from,
+.ds-list-leave-to {
+  opacity: 0;
+  transform: translateY(var(--space-2));
+}
+.ds-list-leave-active {
+  position: absolute;
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+  .ds-page-enter-from,
+  .ds-page-leave-to,
+  .ds-slide-up-enter-from,
+  .ds-slide-up-leave-to,
+  .ds-scale-fade-enter-from,
+  .ds-scale-fade-leave-to,
+  .ds-list-enter-from,
+  .ds-list-leave-to {
+    transform: none;
+  }
+}
+
+/* G2：corner-shape 不继承，必须逐个元素命中；通配选择器是刻意的。 */
+@supports (corner-shape: squircle) {
+  *,
+  *::before,
+  *::after {
+    corner-shape: var(--g2-shape, squircle);
+  }
+}
+
+/* 例外必须显式登记并附理由；不要靠漏写。
+ * Element Plus 内部的正圆必须保持正圆，否则会被 G2 压成超椭圆。 */
+.el-avatar--circle,
+.el-backtop,
+.el-badge__content.is-dot,
+.el-button.is-circle,
+.el-carousel__arrow,
+.el-color-picker__cursor,
+.el-image-viewer__btn,
+.el-radio__inner,
+.el-radio__inner::after,
+.el-skeleton__circle,
+.el-slider__button,
+.el-step__icon.is-text,
+.el-switch__action,
+.el-table .required > div::before,
+.el-tabs__item .is-icon-close,
+.el-tag .el-icon,
+.el-timeline-item__node,
+.el-tour-indicator,
+[data-g2-exempt],
+[data-g2-exempt] * {
+  corner-shape: round;
+}
+
+/* 仅给显式 opt-in 的 .ds-g2-surface 使用；clip-path 会裁掉自身阴影与描边。 */
+@supports not (corner-shape: squircle) {
+  .ds-g2-surface {
+    clip-path: var(--g2-clip);
+  }
+}
