@@ -1,0 +1,22 @@
+# ── 构建产物（dotnet build 生成，可从源码一把重建）──────────────────
+app/bin/
+app/obj/
+lib/bin/
+lib/obj/
+
+# ── 发布产物（publish.cmd / publish_no_runtime.cmd 生成）─────────────
+# 只忽略目录；两个 publish*.cmd 是脚本，仍要进仓库
+publish/
+publish_no_runtime/
+
+# ── IDE 与本机临时文件 ─────────────────────────────────────────────
+.vs/
+*.user
+*.suo
+*.DotSettings.user
+*.binlog
+
+# 口径与 README §3.1 一致：app/bin、app/obj、lib/bin、lib/obj、两个 publish* 目录不进版本控制。
+# 注意：.gitignore 只影响未跟踪的文件；HEAD 里已经跟踪的 bin/obj 与旧 publish 产物，
+# 需要先 `git rm -r --cached <路径>` 才会真正脱离版本控制。
+# `%APPDATA%\QuickPanel\`（设置与 selftest 输出）不在仓库内，无需列。
