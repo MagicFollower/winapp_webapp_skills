@@ -43,6 +43,10 @@
         <Style x:Key="ChipGroupText" TargetType="TextBlock" BasedOn="{StaticResource ChipText}">
             <Setter Property="Foreground" Value="{DynamicResource UI4.Brush.Text}"/>
         </Style>
+        <!-- 已收藏：只描强调色边、不填 SelectedOverlay（那种底色是留给危险与"本机未找到"的眼） -->
+        <Style x:Key="ChipFavorite" TargetType="Border" BasedOn="{StaticResource Chip}">
+            <Setter Property="BorderBrush" Value="{DynamicResource UI4.Brush.Accent}"/>
+        </Style>
 
         <!-- ── 一张卡片 = 一个系统入口：功能名 / 命令原文（等宽）/ 介绍 / 标签 ──────
              命令是本面板的主信息之一，用排印键 UI4.Font.Size.Code 而不是正文字号。
@@ -56,10 +60,32 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Text="{Binding Title}"
+                <!-- 标题右侧固定让出 26 px 给下面的拖动标记。不分屏开关：切到收藏页时标题若突然缩进
+                     会整片重排，槽位常驻的代价（其它页少 26 px 标题宽）比那个抖动小。 -->
+                <TextBlock Grid.Row="0" Text="{Binding Title}" Margin="0,0,26,0"
                            FontSize="{DynamicResource App.Font.Size.Lead}" FontWeight="SemiBold"
                            Foreground="{DynamicResource UI4.Brush.Text}"
                            TextTrimming="CharacterEllipsis"/>
+
+                <!-- 拖动标记：只在收藏页出现（IsReorderable = 收藏节 且 搜索框为空——搜索态下"拖到这一格"
+                     落到全表顺序上有歧义）。拖动的手势与动画都挂在下面 UI4GridView 的 Preview 事件上，
+                     这里只留一个可命中的 22x22 矩形和 Tag（宿主按 Tag 在卡片模板里找它、按它的屏幕矩形判定
+                     "这一下按在标记上"）——不再依赖子元素的 MouseLeftButtonDown 冒泡与子元素捕获。
+                     字形 E8CB 是 ↑↓（拿 GlyphTypeface 渲出来对着看定的，不是汉堡包也不是省略号）。
+                     用 TextBlock 而不是套一层 Border：Border 没有自动化 peer，读屏与按名字找元素的脚本
+                     都拿它没办法；TextBlock 给了 Background 就整块可命中，不需要再垫一层。
+                     AutomationProperties.Name 同理——内容只是私有区码位，不写名字就认不出这是干什么的。 -->
+                <TextBlock Grid.Row="0" Text="&#xE8CB;" Width="22" Height="22" Margin="0,0,2,0"
+                           HorizontalAlignment="Right" VerticalAlignment="Top"
+                           TextAlignment="Center" Padding="0,2,0,0"
+                           Background="Transparent" Cursor="SizeAll"
+                           Tag="FavoriteGrip"
+                           FontFamily="Segoe MDL2 Assets"
+                           FontSize="{DynamicResource App.Font.Size.Small}"
+                           Foreground="{DynamicResource UI4.Brush.TextMuted}"
+                           ToolTip="按住拖动可调整收藏顺序"
+                           AutomationProperties.Name="拖动排序"
+                           Visibility="{Binding DataContext.IsReorderable, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}"/>
 
                 <Border Grid.Row="1" Margin="0,8,0,0" Padding="8,4" CornerRadius="6"
                         Background="{DynamicResource UI4.Brush.OffBackground}"
@@ -77,37 +103,87 @@
                            Foreground="{DynamicResource UI4.Brush.TextMuted}"
                            TextWrapping="Wrap"/>
 
-                <WrapPanel Grid.Row="3" Margin="0,4,0,0">
-                    <!-- 所属大类：只在「全部工具」与搜索中显示（判据在 ToolSection.ShowGroupTags）。
-                         卡片自己的 DataContext 是 ToolItem，所以这一条要经 ListBox 祖先取回分组视图的状态。 -->
-                    <Border Style="{StaticResource Chip}"
-                            Visibility="{Binding DataContext.ShowGroupTags, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Style="{StaticResource ChipGroupText}" Text="{Binding GroupTitle}"/>
-                    </Border>
-                    <Border Style="{StaticResource Chip}">
-                        <TextBlock Style="{StaticResource ChipText}" Text="{Binding PlatformChip}"/>
-                    </Border>
-                    <Border Style="{StaticResource Chip}"
-                            Visibility="{Binding ShowAdminChip, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Style="{StaticResource ChipText}" Text="{Binding AdminChip}"/>
-                    </Border>
-                    <Border Style="{StaticResource Chip}"
-                            Visibility="{Binding ShowEditionChip, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Style="{StaticResource ChipText}" Text="{Binding EditionChip}"/>
-                    </Border>
-                    <Border Style="{StaticResource ChipAlert}"
-                            Visibility="{Binding ShowDangerChip, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Style="{StaticResource ChipAlertText}" Text="{Binding DangerChip}"/>
-                    </Border>
-                    <Border Style="{StaticResource ChipAlert}"
-                            Visibility="{Binding ShowMissingChip, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Style="{StaticResource ChipAlertText}" Text="{Binding MissingChip}"/>
-                    </Border>
-                </WrapPanel>
+                <!-- ── 第 4 行：标签 + 收藏钮 ─────────────────────────────
+                     收藏钮只在鼠标悬浮到这张卡上时出现（外层 Grid 的 Visibility 走容器的 IsMouseOver），
+                     但右下角那块位置一直给它留着（WrapPanel 右侧让出 48 px）——不然悬浮那一刻
+                     标签会被挤得重排，看着像卡片在跳。 -->
+                <Grid Grid.Row="3" Margin="0,4,0,0">
+                    <WrapPanel Margin="0,0,48,0">
+                        <!-- 已收藏排第一个：它是悬浮星标唯一的写入口留下的痕迹，要能一眼核对 -->
+                        <Border Style="{StaticResource ChipFavorite}"
+                                Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource ChipGroupText}" Text="已收藏"/>
+                        </Border>
+                        <!-- 所属大类：只在跨组屏（全部工具、收藏）与搜索中显示（判据在 ToolSection.ShowGroupTags）。
+                             卡片自己的 DataContext 是 ToolItem，所以这一条要经 ListBox 祖先取回分组视图的状态。 -->
+                        <Border Style="{StaticResource Chip}"
+                                Visibility="{Binding DataContext.ShowGroupTags, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource ChipGroupText}" Text="{Binding GroupTitle}"/>
+                        </Border>
+                        <Border Style="{StaticResource Chip}">
+                            <TextBlock Style="{StaticResource ChipText}" Text="{Binding PlatformChip}"/>
+                        </Border>
+                        <Border Style="{StaticResource Chip}"
+                                Visibility="{Binding ShowAdminChip, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource ChipText}" Text="{Binding AdminChip}"/>
+                        </Border>
+                        <Border Style="{StaticResource Chip}"
+                                Visibility="{Binding ShowEditionChip, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource ChipText}" Text="{Binding EditionChip}"/>
+                        </Border>
+                        <Border Style="{StaticResource ChipAlert}"
+                                Visibility="{Binding ShowDangerChip, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource ChipAlertText}" Text="{Binding DangerChip}"/>
+                        </Border>
+                        <Border Style="{StaticResource ChipAlert}"
+                                Visibility="{Binding ShowMissingChip, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource ChipAlertText}" Text="{Binding MissingChip}"/>
+                        </Border>
+                    </WrapPanel>
+
+                    <!-- 悬浮才出现的收藏钮：两个方向各一颗星、互斥显示（空心=还没收藏，实心=已在收藏）。
+                         分成两个按钮而不是一个按钮换文案，是因为字形与 ToolTip 都要跟着状态走，
+                         用一个按钮就得再写一个"码位+提示"的转换器，判据散成两处。
+                         星号码位是拿 GlyphTypeface 渲出来对着看定的：E734 空心星、E735 实心星
+                         （E8FA/E8B0 分别是"添加用户"与指针，不是星）。
+                         AutomationProperties.Name 是给读屏与自动化脚本的：按钮内容只有一个字形，
+                         UIA 名字若不走这里就只剩一个私有区码位，按名字找按钮的脚本会全废。
+                         命令走 Window 祖先取视图模型（卡片在窗口可视树里，不像 Popup 那样断链），
+                         参数是这张卡自己。按钮吃掉左键，所以点它不会连带触发卡片的"单击即执行"。 -->
+                    <Grid HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                          Visibility="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource BoolToVis}}">
+                        <ui:UI4Button Width="{DynamicResource App.Size.RoundButton}"
+                                      Height="{DynamicResource App.Size.RoundButton}"
+                                      Padding="0" CornerRadius="{DynamicResource App.Radius.RoundButton}"
+                                      FontFamily="Segoe MDL2 Assets" Content="&#xE734;"
+                                      FontSize="{DynamicResource App.Font.Size.Icon}"
+                                      GradientStart="{DynamicResource UI4.Color.OffBackground}"
+                                      GradientEnd="{DynamicResource UI4.Color.OffBackground}"
+                                      HoverBackground="{DynamicResource UI4.Brush.AccentDark}"
+                                      ToolTip="添加至收藏"
+                                      AutomationProperties.Name="添加至收藏"
+                                      Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                      CommandParameter="{Binding}"
+                                      Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVis}, ConverterParameter=invert}"/>
+                        <ui:UI4Button Width="{DynamicResource App.Size.RoundButton}"
+                                      Height="{DynamicResource App.Size.RoundButton}"
+                                      Padding="0" CornerRadius="{DynamicResource App.Radius.RoundButton}"
+                                      FontFamily="Segoe MDL2 Assets" Content="&#xE735;"
+                                      FontSize="{DynamicResource App.Font.Size.Icon}"
+                                      GradientStart="{DynamicResource UI4.Color.OffBackground}"
+                                      GradientEnd="{DynamicResource UI4.Color.OffBackground}"
+                                      HoverBackground="{DynamicResource UI4.Brush.AccentDark}"
+                                      ToolTip="从收藏移除"
+                                      AutomationProperties.Name="从收藏移除"
+                                      Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                      CommandParameter="{Binding}"
+                                      Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVis}}"/>
+                    </Grid>
+                </Grid>
             </Grid>
         </DataTemplate>
 
-        <!-- ── 右栏的常驻容器：十个分组的视图叠在同一格里，切换只翻各节的 Visibility ──
+        <!-- ── 右栏的常驻容器：各分组（含全部工具与收藏）的视图叠在同一格里，切换只翻各节的 Visibility ──
              导航项的 Content 全部指向同一个 SectionShell 实例，Content 不变 → 模板不重建 →
              已经实体化过的卡片容器留着。UniformGrid 不虚拟化，重建一次「全部工具」要占住
              UI 线程 190 ms（实测），而数据是固定的，没有理由每次切换再建一遍。 -->
@@ -146,7 +222,10 @@
                      ItemHeight 给 NaN（不写死）：卡片高度由内容决定，字号拉到 28 时介绍与标签
                      才不会被切掉；写死 176 在默认字号下好看，一档上去就整片截断。
                      IsSynchronizedWithCurrentItem 必须显式关掉：默认会自动同步视图的当前项，
-                     于是搜索一改过滤，首项就被"选中"并触发执行，等于替用户点了卡片。 -->
+                     于是搜索一改过滤，首项就被"选中"并触发执行，等于替用户点了卡片。
+                     拖动排序的输入挂在网格的 Preview 事件上并用网格自身捕获鼠标：即便某个子元素
+                     吃掉了冒泡事件或拿走了焦点，手势仍从源头看得到；落点也只看几何（最近槽位），
+                     不要求命中卡片内容。 -->
                 <ui:UI4GridView Grid.Row="1" x:Name="ToolGrid"
                                 ItemsSource="{Binding ItemsView}"
                                 ItemTemplate="{StaticResource ToolCard}"
@@ -157,9 +236,15 @@
                                 VerticalAlignment="Top"
                                 IsSynchronizedWithCurrentItem="False"
                                 SelectionChanged="ToolGrid_SelectionChanged"
+                                PreviewMouseLeftButtonDown="ToolGrid_PreviewMouseLeftButtonDown"
+                                PreviewMouseMove="ToolGrid_PreviewMouseMove"
+                                PreviewMouseLeftButtonUp="ToolGrid_PreviewMouseLeftButtonUp"
+                                LostMouseCapture="ToolGrid_LostMouseCapture"
                                 Margin="0,8,0,0"/>
 
-                <TextBlock Grid.Row="1" Text="这一屏没有匹配的入口，换个词试试或清掉搜索框。"
+                <!-- 空态文案由 Section 给（成因不同说法不同：收藏是"还没加、怎么加"，搜索是"词没命中"），
+                     模板里不写第二份判断 -->
+                <TextBlock Grid.Row="1" Text="{Binding EmptyHint}"
                            Visibility="{Binding HasNoMatches, Converter={StaticResource BoolToVis}}"
                            Foreground="{DynamicResource UI4.Brush.TextMuted}"
                            FontSize="{DynamicResource App.Font.Size.Medium}"
@@ -170,8 +255,8 @@
     </Window.Resources>
 
     <!-- 标题栏不要自绘：窗口里出现过 UI4 控件，库就在 Loaded 时按 DWM 把原生标题栏染好。
-         全局缩放挂在根内容的 LayoutTransform 上；已知边界是 Popup（下拉浮层、右键菜单）
-         住在自己的可视根里，不吃这层变换。 -->
+         全局缩放挂在根内容的 LayoutTransform 上；已知边界是 Popup（下拉浮层、ToolTip 浮条）
+         住在自己的可视根里，不吃这层变换。顶部的收藏提示条是普通子元素，所以它跟着缩放一起长。 -->
     <Grid>
         <Grid.LayoutTransform>
             <ScaleTransform ScaleX="{Binding ZoomFactor}" ScaleY="{Binding ZoomFactor}"/>
@@ -257,6 +342,20 @@
                 </Grid>
             </Grid>
         </ui:UI4Grid>
+
+        <!-- 顶部提示条：收藏这类"点了就要当场看见"的动作走这里，页脚那行留痕但不该指望用户回头看屏幕底边。
+             定时自己收（计时器在视图模型里），所以它不是模态框——不抢焦点、不吃点击，
+             "模态框只留给错误报告"这条不变量不松动。挂在根 Grid 内，因此跟着全局缩放一起长。 -->
+        <Border Panel.ZIndex="80" MaxWidth="520" Margin="0,16,0,0" Padding="16,8"
+                HorizontalAlignment="Center" VerticalAlignment="Top"
+                Visibility="{Binding IsToastOpen, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}"
+                Background="{DynamicResource UI4.Brush.Surface}"
+                BorderBrush="{DynamicResource UI4.Brush.Accent}" BorderThickness="1"
+                CornerRadius="{DynamicResource App.Radius.Chip}">
+            <TextBlock Text="{Binding ToastText}" TextWrapping="Wrap" TextAlignment="Center"
+                       FontSize="{DynamicResource App.Font.Size.Small}"
+                       Foreground="{DynamicResource UI4.Brush.Text}"/>
+        </Border>
 
         <!-- 设置浮层：遮罩吃掉点击，卡片内容交给 SettingsOverlay；开合状态只有 IsSettingsOpen 一处 -->
         <Grid x:Name="SettingsHost" Panel.ZIndex="90"

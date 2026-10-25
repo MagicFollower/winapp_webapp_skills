@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using StartUI4Controls;
 using QuickPanel.Helpers;
 using QuickPanel.Models;
@@ -43,6 +44,11 @@ namespace QuickPanel.ViewModels
             Sections = ToolCatalog.BuildSections();
             Shell = new SectionShell(Sections);
             RunToolCommand = new RelayCommand<ToolItem>(item => Execute(item));
+            ToggleFavoriteCommand = new RelayCommand<ToolItem>(item => ToggleFavorite(item));
+
+            // 收藏：把设置里那份命令清单打到卡片镜像上，收藏分组才有内容可过滤。
+            // 顺序要在 BuildSections 之后（节还没建出来就没法通知它重算）。
+            SyncFavoriteViews();
 
             // 一次性枚举系统字体族：每次打开面板再查会卡 UI，而且候选表要"出厂项固定在第 0 位"是结构性契约
             AvailableFonts = Typography.BuildFamilyChoices(
@@ -223,6 +229,8 @@ namespace QuickPanel.ViewModels
         /// <summary>右栏的常驻内容宿主：每个导航项的 Content 都指向这一个实例，切换只改各节 IsActive。</summary>
         public SectionShell Shell { get; private set; }
         public ICommand RunToolCommand { get; private set; }
+        /// <summary>卡片右下角那颗星绑的命令：添加与移除共用一个入口，方向由设置里那份清单决定。</summary>
+        public ICommand ToggleFavoriteCommand { get; private set; }
 
         private string _query = string.Empty;
         public string Query
@@ -241,6 +249,112 @@ namespace QuickPanel.ViewModels
             var result = LaunchService.Launch(item);
             StatusMessage = result.Message;
             return result;
+        }
+
+        /// <summary>
+        /// 收藏的唯一写入口（卡片右下角那颗星走这条命令）。四步缺一不可，且顺序固定：
+        /// 改设置里的那份清单（真源）→ 回写卡片镜像并让收藏节重算 → 立刻落盘
+        /// （收藏是用户主动动作，不该等关窗才存，崩了就白点）→ 顶部提示条 + 页脚各给一句。
+        /// </summary>
+        private void ToggleFavorite(ToolItem item)
+        {
+            if (item == null) return;
+
+            bool on = _settings.ToggleFavorite(item.Command);
+            SyncFavoriteViews();
+            _settings.Save();
+
+            ShowToast(on
+                ? "已添加至收藏：「" + item.Title + "」，左栏「收藏」里可以看它"
+                : "已从收藏移除：「" + item.Title + "」，它仍在所属分组里");
+        }
+
+        /// <summary>
+        /// 拖动排序唯一的提交入口（松手那一次）：按界面算出的最终位次写入真源，再让收藏节
+        /// 用 ObservableCollection.Move 原地重排（不是 Refresh——Reset 会重建容器，页面会跳一下），
+        /// 最后立刻落盘并给顶部提示。拖动过程中不调用它：预览只做位移动画，不改数据，
+        /// 所以中途丢捕获或按 Esc 都能干净地回到原顺序。
+        /// </summary>
+        /// <param name="oldIndex">拖动前这张卡在收藏视图里的下标（也是设置清单里的下标）。</param>
+        /// <param name="newIndex">松手后的最终下标。</param>
+        public bool CommitFavoriteReorder(ToolItem dragged, int oldIndex, int newIndex)
+        {
+            if (dragged == null) return false;
+            if (!_settings.MoveFavoriteToIndex(dragged.Command, newIndex)) return false;
+
+            // 位次镜像仍要更新：以后增删收藏、重建收藏视图时要按新位次排。
+            // 但这一趟不走 NotifyFavoritesChanged（那会 Refresh），收藏视图用 Move 自己跟着走。
+            ToolCatalog.SyncFavorites(_settings.Favorites);
+
+            var favorites = FindFavoritesSection();
+            if (favorites == null || !favorites.MoveFavoriteItem(oldIndex, newIndex))
+            {
+                // 视图没跟上（理论上不会）：退回一次全量刷新，至少保证界面与真源一致
+                foreach (var section in Sections) section.NotifyFavoritesChanged();
+            }
+
+            _settings.Save();
+            ShowToast("已调整收藏顺序：「" + dragged.Title + "」放到第 " + (newIndex + 1) + " 位");
+            return true;
+        }
+
+        private ToolSection FindFavoritesSection()
+        {
+            foreach (var section in Sections)
+                if (string.Equals(section.Key, ToolCatalog.FavoriteKey, StringComparison.Ordinal)) return section;
+            return null;
+        }
+
+        /// <summary>
+        /// 收藏真源变了以后唯一的刷新通路：先重打卡片镜像，再让各节重算视图。
+        /// 逐节调用而不是只找收藏那一节：NotifyFavoritesChanged 对非收藏节本来就是空转，
+        /// 少一次 Find 也就少一处"找不到该怎样"的分支。
+        /// </summary>
+        private void SyncFavoriteViews()
+        {
+            ToolCatalog.SyncFavorites(_settings.Favorites);
+            foreach (var section in Sections) section.NotifyFavoritesChanged();
+        }
+
+        // ── 顶部提示条 ─────────────────────────────────────────────────
+        //
+        // 页脚那行离屏幕底边远、又常被上一次执行结果占着，所以"点了就要当场看见"的动作走提示条。
+        // 它不是模态框：不抢焦点、不吃点击，"模态框只留给错误报告"这条不变量不松动。
+        // 文案同时进页脚（留痕）与提示条（即时），两处读的都是这一次的结果，不写第二份判断。
+
+        private const int ToastSeconds = 3;
+
+        private string _toastText;
+        public string ToastText
+        {
+            get { return _toastText; }
+            private set { SetProperty(ref _toastText, value); }
+        }
+
+        private bool _isToastOpen;
+        public bool IsToastOpen
+        {
+            get { return _isToastOpen; }
+            private set { SetProperty(ref _isToastOpen, value); }
+        }
+
+        private DispatcherTimer _toastTimer;
+
+        private void ShowToast(string message)
+        {
+            StatusMessage = message;
+            ToastText = message;
+            IsToastOpen = true;
+
+            // 计时器只建一次；连点两次要把停留时间重置，而不是让第一次的 tick 提前收掉第二次的提示
+            if (_toastTimer == null)
+            {
+                _toastTimer = new DispatcherTimer();
+                _toastTimer.Tick += (s, e) => { _toastTimer.Stop(); IsToastOpen = false; };
+            }
+            _toastTimer.Interval = TimeSpan.FromSeconds(ToastSeconds);
+            _toastTimer.Stop();
+            _toastTimer.Start();
         }
 
         /// <summary>页脚用的数据源规模，让"这一屏为什么只有 5 张卡"有地方回答。</summary>
