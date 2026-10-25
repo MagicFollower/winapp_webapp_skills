@@ -299,21 +299,32 @@ namespace QuickPanel.Services
         }
 
         /// <summary>
-        /// 把设置里那份命令清单打到卡片镜像上（唯一写 IsFavorite 的地方）。
+        /// 把设置里那份命令清单打到卡片镜像上（唯一写 IsFavorite / FavoriteRank 的地方）。
+        /// 位次按收藏列表的下标算，收藏分组那份视图就是照它排的——所以拖动排序只要重排列表再调这里。
         /// 目录里已经不存在或命令为空的条目静默忽略——不显示也不报错，收藏是用户数据，
         /// 不该因为数据源删了一项就在界面上留个报错的洞。返回真正落到卡片上的条数。
         /// </summary>
         public static int SyncFavorites(IEnumerable<string> favorites)
         {
-            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var rank = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             if (favorites != null)
+            {
+                int index = 0;
                 foreach (string command in favorites)
-                    if (!string.IsNullOrWhiteSpace(command)) set.Add(command.Trim());
+                {
+                    if (string.IsNullOrWhiteSpace(command)) continue;
+                    string key = command.Trim();
+                    // 重复命令只认第一次出现的位次（读侧已去重，这里防的是手改过的文件）
+                    if (!rank.ContainsKey(key)) rank[key] = index++;
+                }
+            }
 
             int applied = 0;
             foreach (var item in Items)
             {
-                bool on = set.Contains(item.Command);
+                int at;
+                bool on = rank.TryGetValue(item.Command, out at);
+                item.FavoriteRank = on ? at : int.MaxValue;
                 item.IsFavorite = on;
                 if (on) applied++;
             }

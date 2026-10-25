@@ -82,6 +82,19 @@ namespace QuickPanel.Models
 
         public event PropertyChangedEventHandler PropertyChanged;
 
+        /// <summary>
+        /// 在收藏列表里的位次（0 起），未收藏为 <see cref="int.MaxValue"/>。
+        /// 真源仍是 <c>SettingsService.Favorites</c> 的列表顺序，这里只是把"顺序"翻成收藏分组那一份
+        /// ICollectionView 能吃的排序键（SortDescription 走属性名反射，认不了 List 的下标）。
+        /// 不需要属性通知：排序只在 NotifyFavoritesChanged 的 Refresh 里重算一次。
+        /// </summary>
+        public int FavoriteRank { get; set; }
+
+        public ToolItem()
+        {
+            FavoriteRank = int.MaxValue;
+        }
+
         // ── 界面直接绑的标签文案 ────────────────────────────────────────
         public string PlatformChip
         {

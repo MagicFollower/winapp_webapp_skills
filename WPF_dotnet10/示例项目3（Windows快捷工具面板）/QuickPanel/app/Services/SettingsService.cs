@@ -282,6 +282,42 @@ namespace QuickPanel.Services
             return -1;
         }
 
+        /// <summary>
+        /// 收藏页拖动手势的落点（按"目标卡"表达）：把 dragged 挪到 target 那一格。
+        /// 语义就是 List 的"先摘出再按原目标下标插回"——往上拖落在目标之前、往下拖落在目标之后，
+        /// 与用户在列表里拖一条东西的直觉一致，不需要额外补偿下标。
+        /// 任一条不在收藏里、或两条本来就是同一格，都不动并回 false（拖动过程中会反复问到）。
+        /// 这里不落盘：一次拖动会跨过好几格，写盘只在松手那一次。
+        /// </summary>
+        public bool MoveFavorite(string dragged, string target)
+        {
+            int from = IndexOfFavorite(dragged);
+            int to = IndexOfFavorite(target);
+            if (from < 0 || to < 0 || from == to) return false;
+            return MoveFavoriteToIndex(dragged, to);
+        }
+
+        /// <summary>
+        /// 收藏页拖动的提交入口：把 dragged 放到<b>最终位次</b> newIndex（0 基，含首尾）。
+        /// 与 MoveFavorite 的区别是落点由界面算好（指针最近槽位），不再依赖"压在某张卡上"：
+        /// 拖到首格之前是 0，拖到末格之后是 Count-1，行间空隙也能落到最近的一格。
+        /// 越界的 newIndex 夹到合法区间；最终位次没变就回 false（松手时不写盘、不弹提示）。
+        /// </summary>
+        public bool MoveFavoriteToIndex(string dragged, int newIndex)
+        {
+            int from = IndexOfFavorite(dragged);
+            if (from < 0 || Favorites.Count <= 1) return false;
+
+            int target = Math.Max(0, Math.Min(newIndex, Favorites.Count - 1));
+            if (target == from) return false;
+
+            string command = Favorites[from];
+            Favorites.RemoveAt(from);
+            // 摘出后 target 仍落在 [0, Count-1]，正好是 Insert 的合法下标（Count 即追加位）
+            Favorites.Insert(target, command);
+            return true;
+        }
+
         private static KeyValuePair<string, string> Pair(string key, string value)
         {
             return new KeyValuePair<string, string>(key, value ?? string.Empty);

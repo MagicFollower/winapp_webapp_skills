@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Data;
 using QuickPanel.Models;
@@ -15,20 +16,25 @@ namespace QuickPanel.ViewModels
     /// shell，由 shell 按 IsActive 决定这一节可不可见。「全部工具」与「收藏」也是一份 Section，
     /// 只是成员分别是所有分组的并集与该并集里已收藏的那部分。
     ///
-    /// 过滤走 ICollectionView 而不是重建集合：卡片数据是只读的，重建会把 GridView 的列数计算与
-    /// 滚动位置一起丢掉，而 Refresh 只重算视图。查询词由外部 SetQuery 推进（只有一个真源），
-    /// 收藏状态变化由外部 NotifyFavoritesChanged 推进（同理，不在这里存第二份收藏清单）。
+    /// 收藏节的顺序<b>由一个 ObservableCollection 自己拿着</b>，不再靠"给共享 List 加 Filter + 按位次排序，
+    /// 每次变更 Refresh"：Refresh 是 Reset，ListBox 会把容器全部重建，拖动松手时页面会肉眼可见地跳一下。
+    /// 独立的集合让拖动提交可以走 ObservableCollection.Move —— 发的是 Move 事件，容器原地挪，
+    /// 页面不重建，FLIP 收尾动画才有连续的起点。
+    ///
+    /// 查询词由外部 SetQuery 推进（只有一个真源），收藏增删由外部 NotifyFavoritesChanged 推进
+    /// （同理，不在这里存第二份收藏真源；那份清单在 SettingsService 里）。
     /// </summary>
     public class ToolSection : ViewModelBase
     {
         private readonly List<ToolItem> _items;
+        private readonly ObservableCollection<ToolItem> _favoriteItems;
         private readonly bool _crossGroup;
         private readonly bool _favoriteOnly;
         private readonly string _allCaption;
         private string _query = string.Empty;
 
         /// <param name="crossGroup">这一节的成员跨大类（全部工具、收藏），卡片要显示所属分组标签。</param>
-        /// <param name="favoriteOnly">只显示已收藏的卡。收藏节走的是过滤而不是维护第二份列表。</param>
+        /// <param name="favoriteOnly">只显示已收藏的卡。成员顺序就是设置里那份收藏顺序。</param>
         public ToolSection(string key, string title, string glyph, List<ToolItem> items,
                            bool crossGroup = false, bool favoriteOnly = false)
         {
@@ -40,7 +46,18 @@ namespace QuickPanel.ViewModels
             _favoriteOnly = favoriteOnly;
             _allCaption = "共 " + _items.Count + " 项";
 
-            ItemsView = new ListCollectionView(_items);
+            if (favoriteOnly)
+            {
+                // 收藏节的视图只跟这份有序集合走；排序不再交给 SortDescription，
+                // 否则 CollectionView 会按位次重新解释 Move，拖动的原位重排就白做了。
+                _favoriteItems = new ObservableCollection<ToolItem>();
+                RebuildFavoriteItems();
+                ItemsView = new ListCollectionView(_favoriteItems);
+            }
+            else
+            {
+                ItemsView = new ListCollectionView(_items);
+            }
             ItemsView.Filter = Filter;
         }
 
@@ -87,6 +104,16 @@ namespace QuickPanel.ViewModels
             }
         }
 
+        /// <summary>
+        /// 这一屏能不能拖动排序：只有收藏页、且搜索框是空的。
+        /// 搜索态关掉是因为视图里只剩几条，"拖到这一格"落到全表顺序上是有歧义的
+        /// （被拖的卡片与它旁边的可见卡之间可能隔着好几条没显示的收藏）。
+        /// </summary>
+        public bool IsReorderable
+        {
+            get { return _favoriteOnly && string.IsNullOrEmpty(_query); }
+        }
+
         /// <summary>空态文案：两个成因要分开说——收藏是"还没加"，搜索是"词没命中"。</summary>
         public string EmptyHint
         {
@@ -117,21 +144,58 @@ namespace QuickPanel.ViewModels
         }
 
         /// <summary>
-        /// 收藏状态变动的唯一入口（卡片镜像由 ToolCatalog.SyncFavorites 先写好）。
-        /// 这里只管"这一屏有哪些卡"与两行文案；卡片自己的标签走 ToolItem 的属性通知。
+        /// 收藏增删的唯一入口（卡片镜像由 ToolCatalog.SyncFavorites 先写好）。
+        /// 成员与顺序一起重建：增删会改变成员集合，Reset 一次没关系；拖动提交不走这里（见 MoveFavoriteItem）。
         /// </summary>
         public void NotifyFavoritesChanged()
         {
             if (!_favoriteOnly) return;
-            RefreshView();
+            RebuildFavoriteItems();
+            RaiseViewStateChanged();
+        }
+
+        /// <summary>
+        /// 拖动提交的唯一入口：在收藏视图上做一次真正的 Move。
+        /// ObservableCollection.Move 发的是 NotifyCollectionChangedAction.Move，ListBox 只挪容器不重建，
+        /// 所以页面不会跳，宿主的 FLIP 收尾动画能接着演进。位次镜像由调用方先同步好。
+        /// </summary>
+        public bool MoveFavoriteItem(int oldIndex, int newIndex)
+        {
+            if (!_favoriteOnly) return false;
+            if (oldIndex < 0 || newIndex < 0) return false;
+            if (oldIndex >= _favoriteItems.Count || newIndex >= _favoriteItems.Count) return false;
+            if (oldIndex == newIndex) return false;
+
+            _favoriteItems.Move(oldIndex, newIndex);
+            return true;
+        }
+
+        /// <summary>按 FavoriteRank 重建收藏节的顺序（位次由 ToolCatalog.SyncFavorites 预先写好）。</summary>
+        private void RebuildFavoriteItems()
+        {
+            var ordered = new List<ToolItem>();
+            foreach (var item in _items)
+                if (item.IsFavorite) ordered.Add(item);
+
+            // 位次在收藏项之间唯一（就是设置里那份清单的下标），同值只可能出现在脏镜像里，稳定排序足够
+            ordered.Sort((a, b) => a.FavoriteRank.CompareTo(b.FavoriteRank));
+
+            _favoriteItems.Clear();
+            foreach (var item in ordered) _favoriteItems.Add(item);
         }
 
         private void RefreshView()
         {
             ItemsView.Refresh();
+            RaiseViewStateChanged();
+        }
+
+        private void RaiseViewStateChanged()
+        {
             RaisePropertyChanged(nameof(MatchCaption));
             RaisePropertyChanged(nameof(HasNoMatches));
             RaisePropertyChanged(nameof(ShowGroupTags));
+            RaisePropertyChanged(nameof(IsReorderable));
             RaisePropertyChanged(nameof(EmptyHint));
         }
 
@@ -155,6 +219,8 @@ namespace QuickPanel.ViewModels
         {
             var item = o as ToolItem;
             if (item == null) return false;
+            // 收藏节的数据源已经只装收藏项，这一条是给"增删还没走 NotifyFavoritesChanged"的瞬间兜底；
+            // 计数那半截走的是整表 _items，必须靠它把未收藏项排除掉。
             if (_favoriteOnly && !item.IsFavorite) return false;
             return ToolCatalog.Matches(item, _query);
         }

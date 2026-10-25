@@ -1,8 +1,13 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using StartUI4Controls;
 using QuickPanel.Models;
 using QuickPanel.ViewModels;
@@ -106,16 +111,578 @@ namespace QuickPanel
             if (vm != null) vm.IsSettingsOpen = true;
         }
 
+        // ── 收藏页的拖动排序 ────────────────────────────────────────────
+        //
+        // 三件事都在宿主层完成，不改库：
+        //   1) 跟手：按住右上角标记后，被拖那张卡的模板根（PART_ItemRoot）用 TranslateTransform 跟着指针走，
+        //      原槽位留在布局里当"洞"，容器抬到 ZIndex 最上层。
+        //   2) 挤位：指针落到最近的槽位就重算"松手后的顺序"，其余卡片用 150ms 位移动画挪到新槽位；
+        //      拖动期间绝不碰数据，所以跨多少格都不会触发 Refresh / 容器重建，中途取消也能干净回去。
+        //   3) 落点：插值只看指针到各槽位中心的距离——首格之前、末格之后、行间空隙都算数，
+        //      不要求命中某张卡（旧实现走 InputHitTest 找卡，空隙里直接丢手势）。
+        //
+        // 位移必须挂在 PART_ItemRoot 上：库在 PrepareContainerForItemOverride 里把 ListBoxItem 的
+        // RenderTransform 拿去跑 HoverScale 了，替换容器那层会连带把悬浮放大弄坏。
+        // 输入挂网格的 Preview 事件并让网格自己捕获鼠标：子元素吃冒泡事件或焦点变化都不影响手势。
+
+        private const string FavoriteGripTag = "FavoriteGrip";
+        private const double DragLiftThreshold = 3;
+        private const int ShiftAnimationMs = 150;
+        private const int SettleAnimationMs = 180;
+        private const double AutoScrollEdge = 42;
+        private const double AutoScrollStep = 26;
+
+        private ToolItem _dragItem;
+        private UI4GridView _dragHost;
+        private ListBoxItem _dragContainer;
+        private FrameworkElement _dragRoot;
+        private TranslateTransform _dragFollow;
+        private UniformGrid _dragPanel;
+        private ScrollViewer _dragScroll;
+        private int _dragOriginIndex;
+        private int _dragInsertIndex;
+        private Point _dragStartPoint;
+        private Point _dragLastPoint;
+        private Point _dragLastScrollPoint;
+        private Point _dragGrabOffset;
+        private bool _dragLifted;
+        private DispatcherTimer _autoScrollTimer;
+        private DispatcherTimer _settleTimer;
+        private readonly List<FrameworkElement> _settleRoots = new List<FrameworkElement>();
+        private UI4GridView _settleHost;
+
+        private void ToolGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left) return;
+
+            var host = sender as UI4GridView;
+            if (host == null) return;
+
+            // 只有收藏页、且搜索框为空时才允许拖：搜索态里"拖到这一格"落到全表顺序上有歧义
+            var section = host.DataContext as ToolSection;
+            if (section == null || !section.IsReorderable) return;
+
+            var container = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
+            if (container == null) return;
+
+            // 按几何判定"这一下按在标记上"：即使命中结果是卡片内容（标记没吃到），只要指针在标记矩形里
+            // 就开拖。多留 4px 容错，仍然不会把卡片正文的点击误判成拖动。
+            var grip = FindFavoriteGrip(container);
+            if (grip == null) return;
+            var pointer = e.GetPosition(host);
+            var gripTopLeft = grip.TranslatePoint(new Point(0, 0), host);
+            var gripRect = new Rect(gripTopLeft.X - 4, gripTopLeft.Y - 4,
+                                    grip.ActualWidth + 8, grip.ActualHeight + 8);
+            if (!gripRect.Contains(pointer)) return;
+
+            var item = container.DataContext as ToolItem;
+            if (item == null) return;
+            int origin = host.Items.IndexOf(item);
+            if (origin < 0) return;
+
+            container.ApplyTemplate();
+            var root = container.Template != null
+                ? container.Template.FindName("PART_ItemRoot", container) as FrameworkElement : null;
+            var panel = FindVisualChild<UniformGrid>(host);
+            if (root == null || panel == null) return;
+
+            // 上一轮松手的收尾动画先落地，否则两套位移会叠在同一批卡片上
+            FinishSettle();
+
+            var rendered = root.TranslatePoint(new Point(0, 0), host);
+            _dragItem = item;
+            _dragHost = host;
+            _dragContainer = container;
+            _dragRoot = root;
+            _dragPanel = panel;
+            _dragScroll = FindVisualChild<ScrollViewer>(host);
+            _dragOriginIndex = origin;
+            _dragInsertIndex = origin;
+            _dragStartPoint = pointer;
+            _dragLastPoint = pointer;
+            _dragLastScrollPoint = _dragScroll != null ? e.GetPosition(_dragScroll) : pointer;
+            _dragGrabOffset = new Point(pointer.X - rendered.X, pointer.Y - rendered.Y);
+            _dragFollow = EnsureTranslate(root);
+            _dragFollow.X = 0;
+            _dragFollow.Y = 0;
+            _dragLifted = false;
+
+            // 捕获挂网格而不是标记：标记是模板内容，刷新/过滤时可能被重造；网格活得更久。
+            // 捕获失败就当作普通按下处理掉，避免把这次按下变成"执行卡片"。
+            if (!host.CaptureMouse())
+            {
+                DetachFavoriteDragInput(true);
+                e.Handled = true;
+                return;
+            }
+
+            // 不吃掉这一下，卡片会把按下当成"选中→执行"，拖一下顺序就弹出一个系统工具
+            e.Handled = true;
+        }
+
+        private void ToolGrid_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (_dragItem == null || !ReferenceEquals(sender, _dragHost)) return;
+
+            if (e.MouseDevice.LeftButton != MouseButtonState.Pressed)
+            {
+                CancelFavoriteDrag();
+                return;
+            }
+
+            var pointer = e.GetPosition(_dragHost);
+            _dragLastPoint = pointer;
+            if (_dragScroll != null) _dragLastScrollPoint = e.GetPosition(_dragScroll);
+
+            if (!_dragLifted)
+            {
+                double dx = pointer.X - _dragStartPoint.X;
+                double dy = pointer.Y - _dragStartPoint.Y;
+                if (dx * dx + dy * dy < DragLiftThreshold * DragLiftThreshold) return;
+                _dragLifted = true;
+                Panel.SetZIndex(_dragContainer, 500);
+                Mouse.OverrideCursor = Cursors.SizeAll;
+                EnsureAutoScrollTimer().Start();
+            }
+
+            UpdateFavoriteDrag(pointer);
+        }
+
+        private void ToolGrid_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_dragItem == null || !ReferenceEquals(sender, _dragHost)) return;
+            e.Handled = true;
+
+            if (!_dragLifted)
+            {
+                // 只是点了一下标记：不动顺序、不写盘、更不执行卡片
+                DetachFavoriteDragInput(true);
+                return;
+            }
+
+            var host = _dragHost;
+            var item = _dragItem;
+            int insert = _dragInsertIndex;
+            int origin = _dragOriginIndex;
+
+            // 收尾要跨一次集合重排（收藏视图走 ObservableCollection.Move，不是 Refresh），
+            // 先把各卡"现在看起来在哪"记下来，换位后把差值装回去再动画到 0——
+            // 被拖的卡从指针处滑进新格，其余卡从半路继续归位。
+            var before = SnapshotFavoritePositions(host);
+
+            bool moved = insert != origin;
+            if (moved)
+            {
+                var vm = Vm;
+                moved = vm != null && vm.CommitFavoriteReorder(item, origin, insert);
+            }
+
+            // 保留卡上的位移，让下面的 FLIP 从当前视觉位置接着走；清状态必须在释放捕获前把 _dragItem 置空，
+            // 否则 ReleaseMouseCapture 同步抛出的 LostMouseCapture 会按"取消"把所有位移清掉（页面就跳了）。
+            DetachFavoriteDragInput(false);
+            host.UpdateLayout();
+            if (!SettleFavoriteDrag(host, before, item))
+                ResetFavoriteItemRoots(host);
+        }
+
+        /// <summary>鼠标捕获被系统拿走（Alt+Tab、弹 UAC）：直接归位并清状态，不提交顺序。</summary>
+        private void ToolGrid_LostMouseCapture(object sender, MouseEventArgs e)
+        {
+            if (_dragItem == null || !ReferenceEquals(sender, _dragHost)) return;
+
+            var host = _dragHost;
+            DetachFavoriteDragInput(true);
+            ResetFavoriteItemRoots(host);
+        }
+
+        /// <summary>
+        /// 拖动中的每帧：被拖的卡按指针走，落点按"最近槽位"算，位次一变就让其余卡片滑到新槽位。
+        /// 槽位从布局系统现取（LayoutInformation），自动滚动导致内容上移时也能立刻跟上。
+        /// </summary>
+        private void UpdateFavoriteDrag(Point pointer)
+        {
+            var slots = CollectFavoriteSlots();
+            if (slots == null || slots.Count != _dragHost.Items.Count) return;
+            if (_dragOriginIndex >= slots.Count) return;
+
+            // 被拖的卡按指针 1:1 跟手；槽位随自动滚动移动时 home 会变，视觉上才钉在指针下
+            Point home = slots[_dragOriginIndex].TopLeft;
+            SetTranslate(_dragFollow,
+                pointer.X - _dragGrabOffset.X - home.X,
+                pointer.Y - _dragGrabOffset.Y - home.Y);
+
+            var probe = new Point(
+                Math.Max(0, Math.Min(_dragHost.ActualWidth, pointer.X)),
+                Math.Max(0, Math.Min(_dragHost.ActualHeight, pointer.Y)));
+            int insert = NearestSlot(slots, probe);
+            if (insert == _dragInsertIndex) return;
+
+            _dragInsertIndex = insert;
+            AnimateFavoriteShift(slots);
+        }
+
+        /// <summary>其余卡片挪到"松手后的位次"对应的槽位；方向与距离都由真实槽位算，行内换行也正确。</summary>
+        private void AnimateFavoriteShift(List<Rect> slots)
+        {
+            int count = _dragHost.Items.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (i == _dragOriginIndex) continue;
+
+                var item = _dragHost.Items[i] as ToolItem;
+                if (item == null) continue;
+                var root = GetFavoriteRoot(item);
+                if (root == null) continue;
+
+                int preview = PreviewIndexFor(i);
+                if (preview < 0 || preview >= slots.Count) continue;
+
+                AnimateTranslate(root, slots[preview].X - slots[i].X, slots[preview].Y - slots[i].Y,
+                                 ShiftAnimationMs);
+            }
+        }
+
+        /// <summary>把原列表里第 index 项在"被拖项落到 insert"之后的位次算出来（列表这一格没动，只是预览）。</summary>
+        private int PreviewIndexFor(int index)
+        {
+            if (_dragInsertIndex < _dragOriginIndex)
+                return index >= _dragInsertIndex && index < _dragOriginIndex ? index + 1 : index;
+            if (_dragInsertIndex > _dragOriginIndex)
+                return index > _dragOriginIndex && index <= _dragInsertIndex ? index - 1 : index;
+            return index;
+        }
+
+        /// <summary>松手后的收尾：每张卡从"当前渲染位置"滑回它的最终布局槽位。返回是否真的挂上了动画。</summary>
+        private bool SettleFavoriteDrag(UI4GridView host, Dictionary<ToolItem, Point> before, ToolItem lifted)
+        {
+            if (host == null || before == null || before.Count == 0) return false;
+
+            var panel = FindVisualChild<UniformGrid>(host);
+            if (panel == null) return false;
+
+            FinishSettle();
+            Point origin = panel.TranslatePoint(new Point(0, 0), host);
+            bool applied = false;
+            for (int i = 0; i < host.Items.Count; i++)
+            {
+                var item = host.Items[i] as ToolItem;
+                if (item == null) continue;
+
+                Point start;
+                if (!before.TryGetValue(item, out start)) continue;
+
+                var container = host.ItemContainerGenerator.ContainerFromIndex(i) as ListBoxItem;
+                if (container == null) continue;
+                container.ApplyTemplate();
+                var root = container.Template != null
+                    ? container.Template.FindName("PART_ItemRoot", container) as FrameworkElement : null;
+                if (root == null) continue;
+
+                Rect slot = LayoutInformation.GetLayoutSlot(container);
+                var translate = EnsureTranslate(root);
+                translate.BeginAnimation(TranslateTransform.XProperty, null);
+                translate.BeginAnimation(TranslateTransform.YProperty, null);
+                translate.X = start.X - (origin.X + slot.X);
+                translate.Y = start.Y - (origin.Y + slot.Y);
+                AnimateTranslate(root, 0, 0, SettleAnimationMs);
+
+                _settleRoots.Add(root);
+                applied = true;
+                if (ReferenceEquals(item, lifted)) Panel.SetZIndex(container, 500);
+            }
+
+            if (!applied) return false;
+
+            _settleHost = host;
+            EnsureSettleTimer().Start();
+            return true;
+        }
+
+        /// <summary>Esc 取消：按当前渲染位置滑回原槽位，顺序真源一个字都没动过，所以不需要回滚数据。</summary>
+        private void CancelFavoriteDrag()
+        {
+            if (_dragItem == null) return;
+
+            var host = _dragHost;
+            var before = host != null ? SnapshotFavoritePositions(host) : null;
+            DetachFavoriteDragInput(false);
+            if (host == null) return;
+
+            host.UpdateLayout();
+            if (before == null || !SettleFavoriteDrag(host, before, null))
+                ResetFavoriteItemRoots(host);
+        }
+
+        /// <summary>
+        /// 清掉输入状态。必须在释放捕获之前把 _dragItem 置空：ReleaseMouseCapture 会同步抛 LostMouseCapture，
+        /// 那时还认得 _dragItem 的话会再走一遍"取消"，把刚算好的收尾位移清掉。
+        /// clearVisuals=false 给松手/取消这两条"要接 FLIP"的路径用，位移由 SettleFavoriteDrag 接管。
+        /// </summary>
+        private void DetachFavoriteDragInput(bool clearVisuals)
+        {
+            var host = _dragHost;
+            var container = _dragContainer;
+            var root = _dragRoot;
+
+            _dragItem = null;
+            _dragHost = null;
+            _dragContainer = null;
+            _dragRoot = null;
+            _dragFollow = null;
+            _dragPanel = null;
+            _dragScroll = null;
+            _dragLifted = false;
+
+            if (_autoScrollTimer != null) _autoScrollTimer.Stop();
+            Mouse.OverrideCursor = null;
+            if (host != null && host.IsMouseCaptured) host.ReleaseMouseCapture();
+            if (container != null) Panel.SetZIndex(container, 0);
+            if (clearVisuals && root != null) root.RenderTransform = null;
+        }
+
+        /// <summary>每个已实体化的收藏卡：条目 → 模板根。非虚拟化网格里逐项都拿得到。</summary>
+        private FrameworkElement GetFavoriteRoot(ToolItem item)
+        {
+            if (_dragHost == null) return null;
+            var container = _dragHost.ItemContainerGenerator.ContainerFromItem(item) as ListBoxItem;
+            if (container == null) return null;
+            container.ApplyTemplate();
+            return container.Template != null
+                ? container.Template.FindName("PART_ItemRoot", container) as FrameworkElement : null;
+        }
+
+        /// <summary>当前视图每一项的布局槽位（宿主坐标系，已含滚动偏移）。缺容器就放弃这一帧。</summary>
+        private List<Rect> CollectFavoriteSlots()
+        {
+            if (_dragHost == null || _dragPanel == null) return null;
+
+            int count = _dragHost.Items.Count;
+            Point origin = _dragPanel.TranslatePoint(new Point(0, 0), _dragHost);
+            var slots = new List<Rect>(count);
+            for (int i = 0; i < count; i++)
+            {
+                var container = _dragHost.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
+                if (container == null) return null;
+                Rect slot = LayoutInformation.GetLayoutSlot(container);
+                slots.Add(new Rect(origin.X + slot.X, origin.Y + slot.Y, slot.Width, slot.Height));
+            }
+            return slots;
+        }
+
+        /// <summary>落点 = 离指针最近的槽位中心。首格前、末格后、行间空隙都能落到最近的一格。</summary>
+        private static int NearestSlot(IList<Rect> slots, Point pointer)
+        {
+            int best = 0;
+            double bestDistance = double.MaxValue;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                Rect slot = slots[i];
+                double dx = pointer.X - (slot.X + slot.Width / 2);
+                double dy = pointer.Y - (slot.Y + slot.Height / 2);
+                double distance = dx * dx + dy * dy;
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = i;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>指针停在上/下边缘时持续滚动：不滚的话"列表外"的位置根本拖不到。</summary>
+        private DispatcherTimer EnsureAutoScrollTimer()
+        {
+            if (_autoScrollTimer != null) return _autoScrollTimer;
+
+            _autoScrollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(45) };
+            _autoScrollTimer.Tick += (s, e) => AutoScrollFavoriteDrag();
+            return _autoScrollTimer;
+        }
+
+        private void AutoScrollFavoriteDrag()
+        {
+            if (!_dragLifted || _dragItem == null || _dragScroll == null) return;
+            if (_dragLastScrollPoint.X < 0 || _dragLastScrollPoint.X > _dragScroll.ActualWidth) return;
+
+            double step;
+            if (_dragLastScrollPoint.Y < AutoScrollEdge) step = -AutoScrollStep;
+            else if (_dragLastScrollPoint.Y > _dragScroll.ActualHeight - AutoScrollEdge) step = AutoScrollStep;
+            else return;
+
+            double max = Math.Max(0, _dragScroll.ExtentHeight - _dragScroll.ViewportHeight);
+            double next = Math.Max(0, Math.Min(max, _dragScroll.VerticalOffset + step));
+            if (Math.Abs(next - _dragScroll.VerticalOffset) < 0.5) return;
+
+            _dragScroll.ScrollToVerticalOffset(next);
+            _dragHost.UpdateLayout();
+            UpdateFavoriteDrag(_dragLastPoint);
+        }
+
+        /// <summary>
+        /// 收尾计时器结束：清掉所有位移与抬升，让下一轮从干净的布局开始。
+        /// 计时器只建一次；新拖动开始时会先 Stop 再复用。
+        /// </summary>
+        private DispatcherTimer EnsureSettleTimer()
+        {
+            if (_settleTimer != null) return _settleTimer;
+
+            _settleTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(SettleAnimationMs + 60) };
+            _settleTimer.Tick += (s, e) => FinishSettle();
+            return _settleTimer;
+        }
+
+        private void FinishSettle()
+        {
+            if (_settleTimer != null) _settleTimer.Stop();
+
+            for (int i = 0; i < _settleRoots.Count; i++)
+            {
+                var root = _settleRoots[i];
+                if (root != null) root.RenderTransform = null;
+            }
+            _settleRoots.Clear();
+
+            if (_settleHost != null)
+            {
+                for (int i = 0; i < _settleHost.Items.Count; i++)
+                {
+                    var container = _settleHost.ItemContainerGenerator.ContainerFromIndex(i) as ListBoxItem;
+                    if (container != null) Panel.SetZIndex(container, 0);
+                }
+                _settleHost = null;
+            }
+        }
+
+        private static void ResetFavoriteItemRoots(UI4GridView host)
+        {
+            if (host == null) return;
+            for (int i = 0; i < host.Items.Count; i++)
+            {
+                var container = host.ItemContainerGenerator.ContainerFromIndex(i) as ListBoxItem;
+                if (container == null) continue;
+                container.ApplyTemplate();
+                var root = container.Template != null
+                    ? container.Template.FindName("PART_ItemRoot", container) as FrameworkElement : null;
+                if (root != null) root.RenderTransform = null;
+                Panel.SetZIndex(container, 0);
+            }
+        }
+
+        private Dictionary<ToolItem, Point> SnapshotFavoritePositions(UI4GridView host)
+        {
+            var positions = new Dictionary<ToolItem, Point>();
+            if (host == null) return positions;
+
+            for (int i = 0; i < host.Items.Count; i++)
+            {
+                var item = host.Items[i] as ToolItem;
+                if (item == null) continue;
+                var container = host.ItemContainerGenerator.ContainerFromIndex(i) as ListBoxItem;
+                if (container == null) continue;
+                container.ApplyTemplate();
+                var root = container.Template != null
+                    ? container.Template.FindName("PART_ItemRoot", container) as FrameworkElement : null;
+                if (root == null) continue;
+                // 含 RenderTransform 的当前渲染位置——半路中的动画也从这里接着走
+                positions[item] = root.TranslatePoint(new Point(0, 0), host);
+            }
+            return positions;
+        }
+
+        private static void AnimateTranslate(FrameworkElement root, double x, double y, int milliseconds)
+        {
+            var translate = EnsureTranslate(root);
+            var duration = new Duration(TimeSpan.FromMilliseconds(milliseconds));
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            translate.BeginAnimation(TranslateTransform.XProperty,
+                new DoubleAnimation(x, duration) { EasingFunction = ease });
+            translate.BeginAnimation(TranslateTransform.YProperty,
+                new DoubleAnimation(y, duration) { EasingFunction = ease });
+        }
+
+        private static void SetTranslate(TranslateTransform translate, double x, double y)
+        {
+            translate.BeginAnimation(TranslateTransform.XProperty, null);
+            translate.BeginAnimation(TranslateTransform.YProperty, null);
+            translate.X = x;
+            translate.Y = y;
+        }
+
+        private static TranslateTransform EnsureTranslate(FrameworkElement root)
+        {
+            var translate = root.RenderTransform as TranslateTransform;
+            if (translate == null)
+            {
+                translate = new TranslateTransform();
+                root.RenderTransform = translate;
+            }
+            return translate;
+        }
+
+        private static FrameworkElement FindFavoriteGrip(DependencyObject container)
+        {
+            if (container == null) return null;
+
+            int count = VisualTreeHelper.GetChildrenCount(container);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(container, i);
+                var element = child as FrameworkElement;
+                if (element != null && string.Equals(element.Tag as string, FavoriteGripTag, StringComparison.Ordinal))
+                    return element;
+
+                var found = FindFavoriteGrip(child);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static T FindAncestor<T>(DependencyObject node) where T : DependencyObject
+        {
+            while (node != null)
+            {
+                var typed = node as T;
+                if (typed != null) return typed;
+                if (!(node is Visual)) return null;
+                node = VisualTreeHelper.GetParent(node);
+            }
+            return null;
+        }
+
+        private static T FindVisualChild<T>(DependencyObject obj) where T : DependencyObject
+        {
+            if (obj == null) return null;
+
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(obj); i++)
+            {
+                var child = VisualTreeHelper.GetChild(obj, i);
+                var typed = child as T;
+                if (typed != null) return typed;
+
+                var found = FindVisualChild<T>(child);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
         private void SettingsOverlay_BackgroundClick(object sender, MouseButtonEventArgs e)
         {
             var vm = Vm;
             if (vm != null) vm.IsSettingsOpen = false;
         }
 
-        /// <summary>浮层开合的四个入口（齿轮 / 完成 / 遮罩 / Esc）里只有这里需要按键；开着时遮罩盖住齿轮，所以齿轮只负责开。</summary>
+        /// <summary>浮层开合的四个入口（齿轮 / 完成 / 遮罩 / Esc）里只有这里需要按键；开着时遮罩盖住齿轮，所以齿轮只负责开。
+        /// 拖动中的 Esc 先把卡片送回原位（顺序真源还没改过），再轮到设置浮层。</summary>
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key != Key.Escape) return;
+
+            if (_dragItem != null)
+            {
+                CancelFavoriteDrag();
+                e.Handled = true;
+                return;
+            }
 
             var vm = Vm;
             if (vm != null && vm.IsSettingsOpen)

@@ -299,6 +299,27 @@ namespace QuickPanel.Services
                 && !favToggle.ToggleFavorite("   ") && favToggle.Favorites.Count == 0,
                 "计数=" + favToggle.Favorites.Count);
 
+            // 拖动排序的落点：只改顺序、不动集合。往下拖落在目标之后、往上拖落在目标之前，
+            // 与在列表里拖一条东西的直觉一致（List 的"摘出再按原目标下标插回"天然就是这个行为）。
+            var down = new SettingsService();
+            down.ToggleFavorite("A"); down.ToggleFavorite("B"); down.ToggleFavorite("C");
+            bool movedDown = down.MoveFavorite("A", "C");
+            var up = new SettingsService();
+            up.ToggleFavorite("A"); up.ToggleFavorite("B"); up.ToggleFavorite("C");
+            bool movedUp = up.MoveFavorite("C", "A");
+            failed += Check(report, "MoveFavorite 往下落在目标之后、往上落在目标之前",
+                movedDown && Join(down.Favorites) == "B|C|A" && movedUp && Join(up.Favorites) == "C|A|B",
+                "下拖=" + Join(down.Favorites) + " 上拖=" + Join(up.Favorites));
+
+            // 不动的三种情况都要回 false：同一格、被拖的不在收藏里、目标不在收藏里。
+            // 拖动过程中每一帧都会问一次，判错就会把没收藏的卡凭空塞进列表。
+            var noop = new SettingsService();
+            noop.ToggleFavorite("A"); noop.ToggleFavorite("B");
+            failed += Check(report, "MoveFavorite 对同格与不在收藏里的命令一律不动",
+                !noop.MoveFavorite("A", "A") && !noop.MoveFavorite("A", "ZZZ") && !noop.MoveFavorite("ZZZ", "A")
+                && Join(noop.Favorites) == "A|B",
+                "实际=" + Join(noop.Favorites));
+
             return failed;
         }
 
@@ -842,6 +863,39 @@ namespace QuickPanel.Services
                 failed += Check(report, "IsFavorite 只在真变了时发通知（同值不刷）",
                     notifications == 2, "通知 " + notifications + " 次");
 
+                // 位次镜像与排序：收藏节要按用户排的位次显示，而不是数据源顺序。
+                // 出题刻意选"数据源里在前、收藏里在后"的一对：taskmgr 在 perf 组、notepad 在 run 组，
+                // 目录顺序是 taskmgr 先；把 notepad 排到第一位，视图若没真排序就还是 taskmgr 先。
+                ToolCatalog.SyncFavorites(new[] { "notepad.exe", "taskmgr.exe" });
+                favSec.NotifyFavoritesChanged();
+                var favViewTitles = new List<string>();
+                foreach (var o in favSec.ItemsView) favViewTitles.Add(((Models.ToolItem)o).Title);
+                var allViewFirst = null as string;
+                foreach (var o in allSec.ItemsView) { allViewFirst = ((Models.ToolItem)o).Command; break; }
+                failed += Check(report, "收藏节按位次排（notepad 在 taskmgr 前），源列表顺序没被动",
+                    favViewTitles.Count == 2 && favViewTitles[0] == notepad.Title && favViewTitles[1] == taskmgr.Title
+                    && notepad.FavoriteRank == 0 && taskmgr.FavoriteRank == 1
+                    && allViewFirst == items[0].Command,
+                    "收藏顺序=" + string.Join(",", favViewTitles.ToArray())
+                    + " 位次=" + notepad.FavoriteRank + "/" + taskmgr.FavoriteRank
+                    + " 全部节首项=" + allViewFirst);
+
+                // 拖动标记的可判据：收藏页且搜索框为空才可用；其余屏与搜索态都不可用
+                bool reorderOnFav = favSec.IsReorderable;
+                favSec.SetQuery("记事本");
+                bool reorderOffInSearch = !favSec.IsReorderable;
+                favSec.SetQuery(string.Empty);
+                failed += Check(report, "IsReorderable 只在收藏页且无搜索时为真",
+                    reorderOnFav && reorderOffInSearch && ipSec != null && !ipSec.IsReorderable
+                    && allSec != null && !allSec.IsReorderable,
+                    "收藏=" + reorderOnFav + " 搜索中=" + reorderOffInSearch
+                    + " 单分组=" + (ipSec == null ? "?" : ipSec.IsReorderable.ToString()));
+
+                // 未收藏的项位次必须是"排到最后"那一档，否则它会在收藏节里插到前面
+                failed += Check(report, "未收藏项的位次是 int.MaxValue（不会挤进收藏顺序）",
+                    items[0].FavoriteRank == int.MaxValue && !items[0].IsFavorite,
+                    items[0].Command + " rank=" + items[0].FavoriteRank);
+
                 // 跑完复位：这一段之后还要建主窗口，别把脏镜像留给下面的模板断言
                 ToolCatalog.SyncFavorites(new string[0]);
                 favSec.NotifyFavoritesChanged();
@@ -882,6 +936,20 @@ namespace QuickPanel.Services
                     "按钮数=" + stars.Count
                     + " 字形=" + string.Join(",", starGlyphs.ConvertAll(g => g.Length == 1 ? ((int)g[0]).ToString("X4") : "空").ToArray())
                     + " 名字=" + string.Join(",", starNames.ToArray()));
+
+                // 14e) 拖动标记同样要在模板里：全模板带 UIA 名字的子元素恰好三枚（两颗星 + 一枚标记）。
+                //      标记挂错容器（比如挂进标题的 TextBlock 里）不会报错，只会"看不见也拖不动"。
+                var namedParts = new List<FrameworkElement>();
+                CollectDescendants(cardRoot, namedParts);
+                var named = new List<string>();
+                foreach (var part in namedParts)
+                {
+                    string automationName = System.Windows.Automation.AutomationProperties.GetName(part);
+                    if (!string.IsNullOrEmpty(automationName)) named.Add(automationName);
+                }
+                failed += Check(report, "卡片模板带一枚「拖动排序」标记（带名字的子元素恰好三枚）",
+                    named.Contains("拖动排序") && named.Count == 3,
+                    "带名字=" + string.Join(",", named.ToArray()));
 
                 // 14b) 右栏不重建的前提：每个导航项的 Content 必须是同一个 shell 实例。
                 //      容器报出去的 UIA 名字走"数据项的纯文本"，所以名字要钉在 NavSectionItem.ToString() 上。

@@ -270,6 +270,42 @@ namespace QuickPanel.ViewModels
         }
 
         /// <summary>
+        /// 拖动排序唯一的提交入口（松手那一次）：按界面算出的最终位次写入真源，再让收藏节
+        /// 用 ObservableCollection.Move 原地重排（不是 Refresh——Reset 会重建容器，页面会跳一下），
+        /// 最后立刻落盘并给顶部提示。拖动过程中不调用它：预览只做位移动画，不改数据，
+        /// 所以中途丢捕获或按 Esc 都能干净地回到原顺序。
+        /// </summary>
+        /// <param name="oldIndex">拖动前这张卡在收藏视图里的下标（也是设置清单里的下标）。</param>
+        /// <param name="newIndex">松手后的最终下标。</param>
+        public bool CommitFavoriteReorder(ToolItem dragged, int oldIndex, int newIndex)
+        {
+            if (dragged == null) return false;
+            if (!_settings.MoveFavoriteToIndex(dragged.Command, newIndex)) return false;
+
+            // 位次镜像仍要更新：以后增删收藏、重建收藏视图时要按新位次排。
+            // 但这一趟不走 NotifyFavoritesChanged（那会 Refresh），收藏视图用 Move 自己跟着走。
+            ToolCatalog.SyncFavorites(_settings.Favorites);
+
+            var favorites = FindFavoritesSection();
+            if (favorites == null || !favorites.MoveFavoriteItem(oldIndex, newIndex))
+            {
+                // 视图没跟上（理论上不会）：退回一次全量刷新，至少保证界面与真源一致
+                foreach (var section in Sections) section.NotifyFavoritesChanged();
+            }
+
+            _settings.Save();
+            ShowToast("已调整收藏顺序：「" + dragged.Title + "」放到第 " + (newIndex + 1) + " 位");
+            return true;
+        }
+
+        private ToolSection FindFavoritesSection()
+        {
+            foreach (var section in Sections)
+                if (string.Equals(section.Key, ToolCatalog.FavoriteKey, StringComparison.Ordinal)) return section;
+            return null;
+        }
+
+        /// <summary>
         /// 收藏真源变了以后唯一的刷新通路：先重打卡片镜像，再让各节重算视图。
         /// 逐节调用而不是只找收藏那一节：NotifyFavoritesChanged 对非收藏节本来就是空转，
         /// 少一次 Find 也就少一处"找不到该怎样"的分支。
