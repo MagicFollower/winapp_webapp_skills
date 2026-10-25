@@ -784,10 +784,17 @@ namespace QuickPanel.Services
                 && iconRebuild.Probe == ToolProbe.None
                 && !iconRefresh.RequiresAdmin && !iconRebuild.RequiresAdmin,
                 "刷新 probe=" + (iconRefresh == null ? "?" : iconRefresh.ProbeName) + " 重建 danger=[" + (iconRebuild == null ? "?" : iconRebuild.DangerNote) + "]");
-            failed += Check(report, "DetailTip 通路：写了 DetailNote 就用它，没写的仍是通用提示",
-                iconRefresh != null && iconRefresh.DetailTip == iconRefresh.DetailNote
-                && sample != null && sample.DetailTip == "运行框里的原文，点击卡片即执行",
-                "样例=" + (sample == null ? "?" : sample.DetailTip));
+            failed += Check(report, "DetailTip：第一行是完整命令，第二行起是 DetailNote 或一句话介绍",
+                iconRefresh != null && iconRebuild != null && sample != null
+                && iconRefresh.DetailTipBody == iconRefresh.DetailNote
+                && iconRefresh.DetailTip == iconRefresh.Command + Environment.NewLine + iconRefresh.DetailNote
+                && iconRebuild.DetailTipBody == iconRebuild.DetailNote
+                && iconRebuild.DetailTip == iconRebuild.Command + Environment.NewLine + iconRebuild.DetailNote
+                && sample.DetailTipBody == sample.Description
+                && sample.DetailTip == sample.Command + Environment.NewLine + sample.Description,
+                "刷新=" + (iconRefresh == null ? "?" : iconRefresh.DetailTip.Length.ToString())
+                + " 重建=" + (iconRebuild == null ? "?" : iconRebuild.DetailTip.Length.ToString())
+                + " 样例=" + (sample == null ? "?" : sample.Title + " / " + sample.DetailTipBody));
 
             // 13c) 常驻右栏：Activate 只改 IsActive，任何时刻最多一节可见
             var shellVm = new QuickPanel.ViewModels.SectionShell(sections);

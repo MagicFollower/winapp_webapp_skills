@@ -100,7 +100,7 @@ C:\...\QuickPanel\lib\UI4Panel.cs(21,28): warning CS1574: ...“Title”
 - **配色与令牌**：令牌数仍是 38、三份内置定义逐令牌可取色、宿主明暗两套定义的对比度与亮度判据自洽、`Theme.Policy` 已显式决策、出货两档的资源键齐全、字典底色与宿主 `Dark` 定义同源。
 - **设置通路（kv1）**：九项互不相同的哨兵值往返、写侧键名点名、含 `=`/反斜杠/中文/首尾空格/空串的取值、CR/LF 必须被拒、越界钳位、非法值不覆盖现值、`null`/空 map 不清现值。
 - **排印与缩放**：库有没有发布 `UI4.Font.*` 兜底值、宿主覆盖换档后还在、字号层级阶梯、固定件尺寸（圆钮/胶囊/**左栏/搜索框**）、区间钳位、字体候选表首位、缩放转换器边界、明暗策略与可选档自洽、主窗口与设置面板两块 XAML 能构造。
-- **数据源（本项目新增）**：分组数与容量、每项字段齐全且介绍 10–48 字、命令全局唯一、**探测挡位与"真正被启动的那个文件"自洽**（不是看命令尾巴）、`ProbePath` 三挡拼接、`regedit` 与 `explorer.exe` 必须走 WindowsFile 挡、**不含实测不存在的常见误传命令**、家庭版缺失项点名一致、过滤口径五例、分组视图随查询词过滤并可复原、分组图标是单个私有区码位、每项的分组标题与所属分组一致、「全部工具」与搜索中才显示分组标签、IP 与 DNS 那 11 条点名齐全且都不设探测、图标缓存那两条的悬浮说明与危险标签各就各位（含 `DetailTip` 回落通路）、切分组只点亮一节、卡片/分组/右栏常驻三块模板能实例化、导航项共用同一个 `Content` 且 UIA 名字仍是分组标题。
+- **数据源（本项目新增）**：分组数与容量、每项字段齐全且介绍 10–48 字、命令全局唯一、**探测挡位与"真正被启动的那个文件"自洽**（不是看命令尾巴）、`ProbePath` 三挡拼接、`regedit` 与 `explorer.exe` 必须走 WindowsFile 挡、**不含实测不存在的常见误传命令**、家庭版缺失项点名一致、过滤口径五例、分组视图随查询词过滤并可复原、分组图标是单个私有区码位、每项的分组标题与所属分组一致、「全部工具」与搜索中才显示分组标签、IP 与 DNS 那 11 条点名齐全且都不设探测、图标缓存那两条的悬浮说明与危险标签各就各位（含命令首行 + `DetailTipBody` 回落通路）、切分组只点亮一节、卡片/分组/右栏常驻三块模板能实例化、导航项共用同一个 `Content` 且 UIA 名字仍是分组标题。
 
 - `dotnet run` 会占住终端（GUI 进程不退出），自动化里用 `Start-Process -PassThru` 起 exe、按 pid 读 `MainWindowTitle`，验完 `Stop-Process -Id` **只关自己起的那个 pid**。
 - 带空格/中文的路径要用引号包住再传给 `Start-Process -FilePath`。
@@ -442,7 +442,7 @@ csproj Version=0.1.0
 
 - **`ie4uinit.exe -show` 不重建缓存**：跑完那 15 个 `iconcache_*.db` 前后一字节不差（都是 33,437,056 B），退出码还取不到（它把活交给 Shell 就退）。所以它只能"重画"，卡片文案据此写成"只让 Shell 重画，缓存文件原样保留"，别写成"刷新/重建缓存"。
 - **那批缓存被 `explorer.exe` 锁着**（独占打开失败），而旧版遗留的 `%LOCALAPPDATA%\IconCache.db` 反而没被锁——只删后者在现代 Windows 上基本无效。要真重建就必须先停 Explorer，这条代价写进 `DangerNote`（`会关闭所有文件夹窗口`）。
-- **卡片正文那行放不下"两条方式的差别"**：介绍受 ≤48 字约束，且网格等分高度会让一处变长把 90 张卡全撑高。所以长解释落在命令条的悬浮说明（新增 `ToolItem.DetailNote` → `DetailTip`，没写这项的卡片仍是原来的通用提示），可见那行只放决定性差别。
+- **卡片正文那行放不下"两条方式的差别"**：介绍受 ≤48 字约束，且网格等分高度会让一处变长把 90 张卡全撑高。所以长解释落在命令条的悬浮说明（`ToolItem.DetailNote` → `DetailTipBody`；悬浮第一段是完整命令，分隔线后才是正文，没写 `DetailNote` 的卡片正文回落到一句话介绍），可见那行只放决定性差别。
 
 主要来源：
 - Microsoft Learn《Launch Windows Settings》（`ms-settings:` URI 的 Win10/Win11 弃用与新增标注，本页是版本判定的主依据）`https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings`
@@ -501,6 +501,10 @@ Files <seed>/lib/UI4NavigationView.cs and <proj>/lib/UI4NavigationView.cs differ
 - **别绑静态属性**：`{Binding Path=(ui:UI4Theme.CurrentMode)}` 会停在初值——库发的是 `StaticPropertyChanged`，WPF 普通绑定要找同名 `<属性>Changed` 静态事件。本项目页脚订阅 `UI4Theme.ThemeChanged` 后读 `ResolvedKey/CurrentMode/ResolvedMode`。
 - **`UI4Grid.Background` 会被库覆写**：主题切换时 `UpdateBackground()` 直接 `SetValue` 写回渐变，宿主赋的底色会丢。要固定底色就用普通 `Grid` 或 `UI4Panel`。
 - **`UI4NavigationView` 有 6 个颜色 DP 不跟令牌**（`ItemBackground`/`ItemForeground`/`ItemHoverColor`/`ItemHoverForeground`/`ItemPressedBackground`/`ItemPressedForeground`，深色下否则黑字压黑底）。本项目把后 5 个显式接回令牌，`ItemBackground` 按建议保持 `Transparent`——`MainWindow.xaml` 里已经逐个接好。
+- **右栏内容面板没有公开的底色/圆角 DP**：模板里的右栏 Border 不在 `PART_*` 名单里，库也没暴露它。本项目在 `MainWindow.StyleNavContentPanel()` 里从 `PART_ContentPresenter` 往上取父 `Border`，补 `Background`（动态令牌）、`CornerRadius=12`（四角）、`Margin=12,0,0,0`（与左栏形成两张卡片）、`Padding=0,20,0,0`，并套 12 px 圆角 `Clip` 把内容裁进卡片轮廓；同时把 Nav 自身背景设成透明，圆角与间距缺口才露得出外层渐变。`Padding` 落在 `ContentPresenter` 外侧，切分组的滑入动画仍只在面板内部跑。升级 `lib/` 后若模板结构变了，这里会因取不到父 Border 而静默跳过，需要回看。
+- **左栏也没有 CornerRadius DP，且不能只垫背景**：模板顶行的 1 px 分隔线会从圆角外露出来。`MainWindow.StyleNavLeftRail()` 直接给 `PART_LeftPanel` 套 12 px 圆角 `RectangleGeometry` 的 `Clip`，四角一起圆；左栏宽度随字号变、高度随窗口变，所以在 `SizeChanged` 里重算 `Clip` 的 Rect。
+- **导航项高亮右侧没有圆角不是错觉**：`UI4NavigationView` 把项容器宽绑成 `LeftPanelWidth`（112），而 `UI4ListBox` 模板里的 ScrollViewer 自带 4 px 内边距，视口只剩约 103 px，项右侧连同 6 px 圆角一起被裁平。`MainWindow.StyleNavListBoxViewport()` 取 `PART_ListBox`/`PART_BottomListBox`，把内部 ScrollViewer 的内边距归零；项的 UIA 位置因此左/上各移 4 px，实测 `612,400` → `608,396`，悬浮灰底四角恢复圆角。**切主题后这条会失效**：`UI4ListBox` 的 TextColor/BorderNormalColor/PanelBackground/HoverBackground 是资源引用，换主题时 DP 回调 `OnStyleRefresh` 执行 `Style = BuildListStyle()`，新 ControlTemplate 里的 ScrollViewer 又把 `Padding` 写回 4 px；所以 `OnThemeChanged` 在 `DispatcherPriority.Loaded` 与 `ApplicationIdle` 各重打一次补丁（`StyleNavContentPanel`/`StyleNavLeftRail`/`StyleNavListBoxViewport`）。只在构造与 Loaded 设一次，换档后必然回到直角。
+- **项背景右侧贴边**：库模板给 `PART_ItemBorder` 的 `Margin` 是 `2,0,0,0`（左边有 2 px，右边 0）；ScrollViewer 内边距归零后，灰底右侧就贴到栏边。`ApplyNavItemMargins` 遍历 `PART_ItemBorder`，左边设为 4 px、右边设为 5 px（`NavItemSideInset` / `NavItemRightInset`；右多 1 px 补左栏 Border 的 1 px 右边框，否则可见白边只有 3 px），并挂 `ItemContainerGenerator.StatusChanged`，虚拟化/模板重建后新生成的容器也会补齐。
 - **托盘 `UI4NotifyIcon` 必须在 `OnClosing` 里 `Visibility = Collapsed; Dispose();`**，否则托盘残留点不动的死图标（Shell 行为）。本项目没有托盘。
 - **`UI4MessageBox.Show` 返回 `bool?`**：判 `== true`，别判 `if (result)`。本项目只在执行失败时弹它（模态框只留给错误报告，成功只写页脚）。
 - **PowerShell 侧**：`.ps1` 里有中文字面量必须存成带 BOM 的 UTF-8（PS 5.1 按 ANSI 解码会把中文字节的下一个换行吞掉，两条语句并成一条，报错位置完全看不懂——本轮 `verify-flow2.ps1` 就是这么"语法错"的，补 BOM 即好）；脚本第一句设 `[Console]::OutputEncoding = UTF8`；带中文的路径别用 `powershell -Command` 内联，走 `-File` + 参数。另两条本机实测坑：`powershell -Command "... $_ ..."` 里的 `$_` 会被 Git Bash 吃掉（改成写 `.ps1`），`[Type]::$var` 反射取静态成员时 `ControlType` 的成员是**字段**不是属性（要用 `GetField`）。

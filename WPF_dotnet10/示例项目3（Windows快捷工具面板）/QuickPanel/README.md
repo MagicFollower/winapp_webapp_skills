@@ -146,7 +146,7 @@ flowchart TD
 | 文件 | 职责 | 关键成员 | 改它之前先看 |
 |---|---|---|---|
 | `app/Services/ToolCatalog.cs` | **数据源**：91 项 / 10 组，一行一张卡 | `Groups`（键/标题/图标）、`GroupTitleOf`、`Items`、`I(...)` 建项器、`Matches`、`ProbePath`、`ProbeAvailability`、`BuildSections` | §7.1 新增入口流程、§8.5 探测口径 |
-| `app/Models/ToolItem.cs` | 一张卡的数据与**标签文案** | `GroupTitle`、`CompatNote/DangerNote/DetailNote`、`PlatformChip/AdminChip/EditionChip/MissingChip/DetailTip` | §8.4 标签体系 |
+| `app/Models/ToolItem.cs` | 一张卡的数据与**标签文案** | `GroupTitle`、`CompatNote/DangerNote/DetailNote`、`PlatformChip/AdminChip/EditionChip/MissingChip`、`DetailTipBody/DetailTip` | §8.4 标签体系 |
 | `app/ViewModels/ToolSection.cs` | 一个分组在右栏的那块内容 + 常驻外壳 | `ItemsView`（`ListCollectionView` 过滤）、`SetQuery`、`MatchCaption`、`HasNoMatches`、`IsActive`、`ShowGroupTags`；`SectionShell.Activate` | §8.1 右栏常驻 |
 | `app/ViewModels/MainViewModel.cs` | 窗口可绑定视图：设置项 + 数据源 + 执行 | `Sections`/`Shell`、`Query`、`Execute`、`ThemeKey`、`BaseFontSize`、`ZoomPercent`、`IsSettingsOpen`、应用信息只读项 | §8.6 设置流 |
 | `app/Services/LaunchService.cs` | 命令 → 进程 | `Split`（**按第一个空格切** file/args）、`Launch`、`BuildFailureText`（SKU/缺文件/提权分开说） | §8.5 |
@@ -155,7 +155,7 @@ flowchart TD
 | `app/Helpers/Theme.cs` | 宿主配色单源 + **明暗策略** | `Policy`（`both`/`light-only`/`dark-only`，留 `TODO` 时自测直接红）、`BuildLightDefinition`/`BuildDarkDefinition` | §8.2 |
 | `app/Helpers/Typography.cs` | 字号/字体/缩放与固定件尺寸的**唯一常量出处** | 默认值与区间、`SizeOf(role,base)` 层级换算、`NavRailWidth`/`SearchBoxWidth`、`Publish`（写资源键）、`BuildFamilyChoices` | §8.2 |
 | `app/MainWindow.xaml` | 结构 + 模板 | `Window.Resources` 里三块模板（`ToolCard` / `SectionShell` / `ToolSection`）、`Chip*` 样式、齿轮入口、浮层宿主、根 `LayoutTransform` | §5 |
-| `app/MainWindow.xaml.cs` | 只有胶水 | `BuildNavigation`（十一个项共用一个 Content）、`ActivateSelectedSection`、`ToolGrid_SelectionChanged`（执行后清选择）、几何持久化与越界回正、`NavSectionItem` | §8.1 |
+| `app/MainWindow.xaml.cs` | 只有胶水 | `BuildNavigation`（十一个项共用一个 Content）、`ActivateSelectedSection`、`StyleNavContentPanel`（右栏四角/间距/内边距）、`StyleNavLeftRail`（左栏四角圆角 Clip）、`StyleNavListBoxViewport`（导航项视口内边距、项背景右边距、容器重生成钩子）、`ApplyNavItemMargins`、`OnThemeChanged`/`ReapplyNavChrome`（切主题后重打补丁）、`ToolGrid_SelectionChanged`（执行后清选择）、几何持久化与越界回正、`NavSectionItem` | §8.1 |
 | `app/App.xaml.cs` | **启动顺序**（承重） | `--selftest` 分支在最前 → `Register` 明暗两套 → `ThemeService.Apply` → `ApplyDisplaySettings` → 建窗 | §8.2 |
 | `app/Services/SelfTest.cs` | 门禁 | 四段：令牌/配色、设置 kv1、排印与缩放、数据源；共 107 条 | §8.7 |
 | `app/Converters/Converters.cs` | 两个转换器 | `BoolToVis`（浮层与标签显隐）、`ZoomedSize`（缩放下窗口下限折算） | §8.2 |
@@ -181,7 +181,7 @@ flowchart TD
     S1 --> HDR["分组标题 + MatchCaption"]
     S1 --> GRID["UI4GridView（卡片网格）"]
     S1 --> EMPTY["空态文案（HasNoMatches）"]
-    GRID --> CARD["ToolCard 模板：标题 / 命令条(等宽+悬浮详情) / 介绍 / 标签行"]
+    GRID --> CARD["ToolCard 模板：标题 / 命令条(等宽 + 两段式悬浮) / 介绍 / 标签行"]
 ```
 
 ### 5.2 用到的库控件与宿主扩展
@@ -189,7 +189,7 @@ flowchart TD
 | 库控件 | 用在哪 | 宿主必须知道的点 |
 |---|---|---|
 | `UI4GridView` | 每个分组右栏 | `ItemWidth` 只是**算列数的基准单元**，卡片铺满所在列；`ItemHeight=NaN` 让卡片按内容长高；`ItemMargin=20` 同时是投影外溢余量（`ShadowDepth 8 + Blur 12 ≈ 20`）与悬浮放大余量（左右 ≥ 10）；`IsSynchronizedWithCurrentItem="False"` **必须显式关**，否则一改过滤就替你点第一张卡；`ItemsPanel` 是 `UniformGrid`，**不虚拟化** |
-| `UI4NavigationView` | 左栏 | 项必须是 `UI4NavigationViewItem` 真身进 `Items`（库按类型分流）；右栏绑 `SelectedItem.Content`；它**不发 `SelectionChanged`**（`SelectedItem` 只是 `BindsTwoWayByDefault` 的 DP），宿主用 `DependencyPropertyDescriptor` 挂回调；六个颜色 DP 在库里是字面值，深色档下要逐个显式接回令牌 |
+| `UI4NavigationView` | 左栏 | 项必须是 `UI4NavigationViewItem` 真身进 `Items`（库按类型分流）；右栏绑 `SelectedItem.Content`；它**不发 `SelectionChanged`**（`SelectedItem` 只是 `BindsTwoWayByDefault` 的 DP），宿主用 `DependencyPropertyDescriptor` 挂回调；六个颜色 DP 在库里是字面值，深色档下要逐个显式接回令牌；右栏内容面板没有公开的底色/圆角 DP，宿主在 `StyleNavContentPanel` 里从 `PART_ContentPresenter` 的父 Border 补（背景、四角 12 px、左侧 12 px 间距、顶部 20 px、圆角 Clip；Nav 自身要透明，圆角缺口才露得出外层渐变）；左栏也没有 CornerRadius DP，`StyleNavLeftRail` 给 `PART_LeftPanel` 套 12 px 圆角矩形 Clip，尺寸变化时重算；导航项容器宽 112 而 `UI4ListBox` 内部 ScrollViewer 自带 4 px 内边距，`StyleNavListBoxViewport` 把这个内边距归零，否则悬浮/选中灰底的右侧两个圆角会被裁平；库模板又只给项背景 `Margin=2,0,0,0`，`ApplyNavItemMargins` 把每个 `PART_ItemBorder` 的左边距设为 4 px、右边距设为 5 px（`NavItemSideInset` / `NavItemRightInset`；右多 1 px 补左栏 Border 的 1 px 右边框），并用 `ItemContainerGenerator.StatusChanged` 覆盖虚拟化后新生成的容器；切主题时 `UI4ListBox.OnStyleRefresh` 会重建 Style/Template，新 ScrollViewer 的 4 px 内边距又回来，所以 `OnThemeChanged` 在 `Loaded` 与 `ApplicationIdle` 各重打一次补丁 |
 | `UI4TextBox` | 搜索框 | `ShowClearButton`；宽度走 `App.Size.SearchBox` 随字号长 |
 | `UI4Button` | 齿轮、设置面板里所有按钮 | 钉死尺寸时必须显式给 `Padding="0"`（库默认 `10,0,10,0` 会把内容区挤成 8 px）；尺寸/圆角走 `App.Size.RoundButton` / `App.Radius.RoundButton` |
 | `UI4MessageBox` | **只在执行失败时** | 返回 `bool?`，判 `== true`；模态框不用于成功提示 |
@@ -319,11 +319,14 @@ flowchart TD
 flowchart LR
     E["改 app/ 下代码"] --> B["dotnet build app\\QuickPanel.csproj<br/>判据：0 错误 + 固定 9 条警告（都来自 lib 上游）"]
     B --> S["QuickPanel.exe --selftest<br/>退出码 = 失败断言数"]
-    S --> R["dotnet run 起窗口点一遍"]
+    S --> R["run.cmd 起窗口点一遍"]
     R --> E
 ```
 
 警告数**多于或少于 9 条**说明 `lib/` 被动过或文件不全；增量构建会出现 `0 个警告`（只重编 app），要数警告就 `--no-incremental`。
+
+- 根目录的 `run.cmd` 把构建与启动串起来：双击 = `dotnet build` + 启动最新的 Debug exe；`run.cmd selftest` = 构建 + 跑自测并在控制台打印报告。它**不杀已有实例**，构建因文件占用失败时先关窗口再重试。
+- 为什么不用 `dotnet run`：它会占住终端直到窗口关闭，不方便反复起停；`run.cmd` 用 `start` 拉起 exe 后立即返回。
 
 ### 7.3 发版
 
@@ -446,7 +449,7 @@ flowchart TD
 | 所有"家庭版没有 / Win10 上如何"的结论 | 本机是 Win11 26300 `ProfessionalWorkstation`，**未在 Win10 与家庭版真机复测**；靠运行期探测打标签兜底 |
 | `ipconfig /flushdns` 免管理员 | 只在 Win11 上证实 |
 | 常驻 180 张卡容器的内存占用 | 只验了"切换不卡 + 功能正确"，未量化工作集 |
-| 卡片上「详细差别」的长文本 | 只在悬浮时可见（正文那行受 ≤48 字约束，因为网格等分高度会连带撑高全部卡片） |
+| 卡片上「完整命令」与「详细差别」的长文本 | 命令条本身单行省略；悬浮第一段显示完整命令（自动换行），分隔线后才是 `DetailNote` 或一句话介绍（正文那行受 ≤48 字约束，因为网格等分高度会连带撑高全部卡片） |
 
 ---
 

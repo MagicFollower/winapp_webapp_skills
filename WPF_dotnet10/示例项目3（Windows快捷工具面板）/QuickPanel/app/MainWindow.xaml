@@ -90,7 +90,30 @@
                 <Border Grid.Row="1" Margin="0,8,0,0" Padding="8,4" CornerRadius="6"
                         Background="{DynamicResource UI4.Brush.OffBackground}"
                         BorderBrush="{DynamicResource UI4.Brush.BorderWeak}" BorderThickness="1"
-                        ToolTip="{Binding DetailTip}">
+                        ToolTipService.ShowDuration="20000">
+                    <Border.ToolTip>
+                        <ToolTip MaxWidth="720" Padding="0" Background="Transparent" BorderThickness="0">
+                            <Border Background="{DynamicResource UI4.Brush.Surface}"
+                                    BorderBrush="{DynamicResource UI4.Brush.BorderNormal}"
+                                    BorderThickness="1"
+                                    CornerRadius="{DynamicResource App.Radius.Chip}"
+                                    Padding="12,10">
+                                <StackPanel MaxWidth="660">
+                                    <TextBlock Text="{Binding PlacementTarget.DataContext.Command, RelativeSource={RelativeSource AncestorType=ToolTip}}"
+                                               FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                               FontSize="{DynamicResource UI4.Font.Size.Code}"
+                                               Foreground="{DynamicResource UI4.Brush.Accent}"
+                                               TextWrapping="Wrap"/>
+                                    <Border Height="1" Margin="0,8,0,8"
+                                            Background="{DynamicResource UI4.Brush.BorderWeak}"/>
+                                    <TextBlock Text="{Binding PlacementTarget.DataContext.DetailTipBody, RelativeSource={RelativeSource AncestorType=ToolTip}}"
+                                               FontSize="{DynamicResource App.Font.Size.Medium}"
+                                               Foreground="{DynamicResource UI4.Brush.Text}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </ToolTip>
+                    </Border.ToolTip>
                     <TextBlock Text="{Binding Command}"
                                FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
                                FontSize="{DynamicResource UI4.Font.Size.Code}"
@@ -207,7 +230,9 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Margin="4,0,4,4">
+                <!-- 标题左边与第一张卡片对齐：卡片容器左边 = 面板左边 + 24（ItemMargin 20 + 内部视口 4 px）；
+                     原来只留 4，标题会贴面板左沿。 -->
+                <StackPanel Grid.Row="0" Margin="24,0,4,4">
                     <TextBlock Text="{Binding Title}"
                                FontSize="{DynamicResource App.Font.Size.Icon}" FontWeight="SemiBold"
                                Foreground="{DynamicResource UI4.Brush.Text}"/>
@@ -309,8 +334,11 @@
                 </Grid>
 
                 <!-- 左栏分组导航。这六个颜色 DP 在库里是字面默认值、不跟令牌，
-                     深色档下会黑字压黑底，所以逐个显式接回去 -->
+                     深色档下会黑字压黑底，所以逐个显式接回去。
+                     Background=Transparent：右栏内容面板的圆角缺口要露出外层渐变，
+                     否则缺口底下仍是 NavigationView 的同一块底色，看起来还是直角。 -->
                 <ui:UI4NavigationView Grid.Row="1" x:Name="Nav"
+                                      Background="Transparent"
                                       Header="功能分组" LeftPanelWidth="{DynamicResource App.Size.NavRail}"
                                       ItemFontSize="{DynamicResource App.Font.Size.Small}"
                                       ItemForeground="{DynamicResource UI4.Brush.Text}"

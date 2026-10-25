@@ -24,15 +24,46 @@ namespace QuickPanel
             DataContext = new MainViewModel(App.Settings);
 
             BuildNavigation();
+            ReapplyNavChrome();
+            Loaded += (s, e) => ReapplyNavChrome();
 
             // 不要 {Binding Path=(ui:UI4Theme.CurrentMode)}：库发的是 StaticPropertyChanged，
             // 而 WPF 绑静态 CLR 属性找的是同名 <属性>Changed 静态事件，那样会停在初值不再刷新。
-            UI4Theme.ThemeChanged += (s, e) => UpdateFooter();
+            UI4Theme.ThemeChanged += OnThemeChanged;
             UpdateFooter();
 
             RestoreGeometry();
             Closing += MainWindow_Closing;
         }
+
+        private void ReapplyNavChrome()
+        {
+            StyleNavContentPanel();
+            StyleNavLeftRail();
+            StyleNavListBoxViewport();
+        }
+
+        /// <summary>
+        /// 主题切换会触发 UI4ListBox 的 OnStyleRefresh：它重建 Style/ControlTemplate，模板里的
+        /// ScrollViewer 又带着写死的 4 px 内边距。宿主启动时归零的那份补丁因此被换掉，左栏项的
+        /// 右侧圆角在换档后又被裁平。Loaded 一轮处理模板套用，ApplicationIdle 再兜一次晚到的重建。
+        /// </summary>
+        private void OnThemeChanged(object sender, EventArgs e)
+        {
+            UpdateFooter();
+            Dispatcher.BeginInvoke(new Action(ReapplyNavChrome), DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(new Action(ReapplyNavChrome), DispatcherPriority.ApplicationIdle);
+        }
+
+        /// <summary>导航项背景的左右内缩：库模板原本只有左边 2 px，宿主统一改成对称的 4 px。</summary>
+        private const double NavItemSideInset = 4;
+
+        /// <summary>左栏模板的 Border 有 1 px 右边框，ListBox 视口比项容器窄 1 px；右侧再补 1 px，
+        /// 让两侧“可见白边”都是 4 px。</summary>
+        private const double NavItemRightInset = NavItemSideInset + 1;
+
+        /// <summary>防止同一个内部 ListBox 重复挂 StatusChanged；容器在虚拟化/主题重建后要重新补右边距。</summary>
+        private readonly HashSet<ListBox> _navListBoxesWithMarginHook = new HashSet<ListBox>();
 
         private MainViewModel Vm
         {
@@ -73,6 +104,125 @@ namespace QuickPanel
                 .AddValueChanged(Nav, (s, e) => ActivateSelectedSection());
 
             if (Nav.Items.Count > 0) Nav.SelectedItem = Nav.Items[0] as UI4NavigationViewItem;
+        }
+
+        /// <summary>
+        /// 右栏内容面板的底色与圆角在库模板里没有对应 DP，宿主动 PART_ContentPresenter 的父 Border：
+        /// 背景挂 DynamicResource 跟随明暗档；四角都圆，左侧留 12 与左栏形成两张独立卡片；顶部留 20
+        /// 让「全部工具」不再贴着面板上沿。Padding 落在 ContentPresenter 外侧，切分组的内容滑入动画
+        /// 仍只在面板内部跑；圆角 Clip 再把内容裁进卡片轮廓，避免卡片/滚动条盖住下圆角。
+        /// </summary>
+        private void StyleNavContentPanel()
+        {
+            Nav.ApplyTemplate();
+            var content = Nav.Template == null
+                ? null : Nav.Template.FindName("PART_ContentPresenter", Nav) as ContentPresenter;
+            if (content == null) return;
+            var panel = VisualTreeHelper.GetParent(content) as Border;
+            if (panel == null) return;
+
+            panel.SetResourceReference(Border.BackgroundProperty, "UI4.Brush.Background");
+            panel.CornerRadius = new CornerRadius(12);
+            panel.Margin = new Thickness(12, 0, 0, 0);
+            panel.Padding = new Thickness(0, 20, 0, 0);
+
+            panel.SizeChanged -= NavPanel_SizeChanged;
+            panel.SizeChanged += NavPanel_SizeChanged;
+            ApplyRoundedClip(panel);
+        }
+
+        /// <summary>
+        /// 左栏没有 CornerRadius DP，也不能像右栏那样只垫一层背景 Border：模板里那条 1px 分隔线
+        /// 会从圆角外露出来。宿主直接给 PART_LeftPanel 套圆角矩形 Clip，四角一起圆；
+        /// 左栏宽度随字号变、高度随窗口变，所以 SizeChanged 时重算 Clip 的 Rect。
+        /// </summary>
+        private void StyleNavLeftRail()
+        {
+            Nav.ApplyTemplate();
+            var rail = Nav.Template == null
+                ? null : Nav.Template.FindName("PART_LeftPanel", Nav) as Grid;
+            if (rail == null) return;
+
+            rail.SizeChanged -= NavPanel_SizeChanged;
+            rail.SizeChanged += NavPanel_SizeChanged;
+            ApplyRoundedClip(rail);
+        }
+
+        private void NavPanel_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            ApplyRoundedClip(sender as FrameworkElement);
+        }
+
+        /// <summary>
+        /// 导航项容器的宽度绑定的是 LeftPanelWidth，而 UI4ListBox 模板里的 ScrollViewer 自带
+        /// 4 px 内边距；容器比视口宽 8 px，右侧连同 6 px 圆角一起被裁平。宿主把内部 ListBox 的
+        /// ScrollViewer 内边距归零，让悬浮/选中的灰底在栏内完整显示。
+        /// 同时统一项背景的左右内缩：库模板只写了 Margin="2,0,0,0"，现在左 4 px、右 5 px
+        /// （多出的 1 px 补左栏 Border 的 1 px 右边框），逐项补，并挂 StatusChanged 覆盖新容器。
+        /// </summary>
+        private void StyleNavListBoxViewport()
+        {
+            Nav.ApplyTemplate();
+            if (Nav.Template == null) return;
+            StyleNavListBox(Nav.Template.FindName("PART_ListBox", Nav) as ListBox);
+            StyleNavListBox(Nav.Template.FindName("PART_BottomListBox", Nav) as ListBox);
+        }
+
+        private void StyleNavListBox(ListBox listBox)
+        {
+            if (listBox == null) return;
+            listBox.ApplyTemplate();
+            var scrollViewer = FindDescendant<ScrollViewer>(listBox);
+            if (scrollViewer != null) scrollViewer.Padding = new Thickness(0);
+
+            ApplyNavItemMargins(listBox);
+            if (_navListBoxesWithMarginHook.Add(listBox))
+            {
+                listBox.ItemContainerGenerator.StatusChanged += (s, e) =>
+                {
+                    if (listBox.ItemContainerGenerator.Status == GeneratorStatus.ContainersGenerated)
+                        ApplyNavItemMargins(listBox);
+                };
+            }
+        }
+
+        private static void ApplyNavItemMargins(ListBox listBox)
+        {
+            for (int i = 0; i < listBox.Items.Count; i++)
+            {
+                var container = listBox.ItemContainerGenerator.ContainerFromIndex(i) as ListBoxItem;
+                if (container == null) continue;
+                container.ApplyTemplate();
+                var border = container.Template.FindName("PART_ItemBorder", container) as Border;
+                if (border == null) continue;
+
+                var m = border.Margin;
+                border.Margin = new Thickness(NavItemSideInset, m.Top, NavItemRightInset, m.Bottom);
+            }
+        }
+
+        private static T FindDescendant<T>(DependencyObject root) where T : DependencyObject
+        {
+            if (root == null) return null;
+            int count = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                if (child is T match) return match;
+                var found = FindDescendant<T>(child);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static void ApplyRoundedClip(FrameworkElement element)
+        {
+            if (element == null) return;
+            double w = element.ActualWidth;
+            double h = element.ActualHeight;
+            if (w <= 0 || h <= 0) return;
+
+            element.Clip = new RectangleGeometry(new Rect(0, 0, w, h), 12, 12);
         }
 
         /// <summary>切换分组 = 只改显示哪一节。取不到对应分组就整屏不显示，宁可空屏也不让两节叠在一起。</summary>

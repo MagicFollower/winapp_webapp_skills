@@ -109,13 +109,25 @@ namespace QuickPanel.Models
         public bool ShowMissingChip { get { return Availability == ToolAvailability.Missing; } }
         public string MissingChip { get { return "本机未找到"; } }
 
-        /// <summary>命令条的悬浮说明：写了 DetailNote 就用它，否则用通用提示。</summary>
+        /// <summary>悬浮说明正文：写了 DetailNote 就用它；没写时退回卡片上的一句话介绍。</summary>
+        public string DetailTipBody
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(DetailNote)) return DetailNote;
+                if (!string.IsNullOrEmpty(Description)) return Description;
+                return "点击卡片即执行";
+            }
+        }
+
+        /// <summary>命令条的悬浮提示：第一行是完整命令，第二行起是作用/原理。</summary>
         public string DetailTip
         {
             get
             {
-                return string.IsNullOrEmpty(DetailNote)
-                    ? "运行框里的原文，点击卡片即执行" : DetailNote;
+                string body = DetailTipBody;
+                if (string.IsNullOrEmpty(Command)) return body;
+                return Command + Environment.NewLine + body;
             }
         }
 
