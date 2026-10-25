@@ -1,6 +1,6 @@
 ---
 name: startui4-wpf
-description: 用 StartUI4Controls（StartUI4.WPF v3.0.0，net10.0-windows 纯 C# 模板 WPF 组件库）搭工程、改界面与发版本的可复现流程——app/+lib/ 源码自包含骨架（lib 种子本地优先，缺失或不完整时按 manifest 回源并写回；种子自 2026-10-04 起是自持基线 = 仓库内三个示例工程 lib/ 的并集，48 个文件 / DP 声明 238，与旧上游差 14 个文件，-Refresh 默认被挡）、UI4Theme 38 令牌 + UI4.Font.* 三个排印键与 UI4.Brush.*/UI4.Color.* 资源键契约、开工前必问的四挡决策（明暗策略/两档分发口径/要不要套装与 UI4ThemeScope 局部换肤/设置按钮的位置与面板内容）、设置面板通路（应用信息+配色+字体+全局缩放：Typography 单源层级键、ZoomedSize 窗口下限折算、kv1 设置落盘与钳位、Popup 不吃 LayoutTransform 的已知边界）、启动顺序（base.OnStartup 之后才 Register/SetTheme）、DWM 标题栏、UI4MessageBox/UI4ColorPicker/UI4NotifyIcon/UI4CodeEditor/UI4GridView 用法（含右键与托盘菜单的长文字截断三件套 `IsMenuMode`、`UI4GridView` 横向固定不滚、`UI4NavigationView` 的 `ItemFontSize` 归属与项尺寸随字号长）、卡片网格拖动排序的组件内通用方案（八角色契约、Preview+网格捕获、PART_ItemRoot 跟手、最近槽位/自动滚动、ObservableCollection.Move 松手提交与 FLIP 收尾、不 Refresh）、界面自适应当编码期约束、间距刻度与阴影/悬浮外溢余量（组件之间不贴边、投影不被切平、钉死尺寸的圆钮会被字号撑爆）、单文件两档发布（self_contained / no_runtime）与 --selftest 门禁（含排印与缩放段）、FileVersion 守门、应用图标默认本地生成（make-icon.ps1 出字母像素多尺寸 ico，不联网不依赖 ImageMagick）、交付 doc/运行与构建（T0Level）.md 八节（每条命令本机跑过贴真实输出，没跑过标未验证）与交付前目录收敛、既有工程里修 bug/做优化的三步执行流程（5.1 分析问题与设计方案→5.2 满足验收标准的最小化修改 + 改完自检、不主动写测试也不主动跑挡位、build 0 错误是默认唯一门禁、改 lib/ 组件源码前先征求用户同意→5.3 处理完立刻把问题与核心修复方案概要追加进当日 doc/YYYY-MM-DD优化与Bug修复清单.md、不等验收确认、不回改旧条目）、以及组件源码改动回灌种子+重钉清单+反向回灌三个示例工程的同步链。当需要新建 .NET 10 WPF 桌面应用、要写或改 UI4* 控件的 XAML/C#、给应用加设置页/主题切换/字号缩放、切主题或调字号后某处没跟着变、{DynamicResource UI4.*} 解析不到、找不到 StartUI4Controls 的类型或属性、组件源码目录是空目录或缺文件、UI4 控件在深色下对比度不对、要打包 WPF 单 exe、要补零基础上手文档或把既有 StartUI4 工程按示例项目结构收敛时使用；要在既有 StartUI4 工程里修缺陷或做优化时也用它，按 5.1–5.3 三步走。不用于 WinForms、UWP/WinUI、.NET Framework 48 版 StartUI4，也不用于不含该库的普通 WPF 页面。
+description: 用 StartUI4Controls（StartUI4.WPF v3.0.0，net10.0-windows 纯 C# 模板 WPF 组件库）搭工程、改界面与发版本的可复现流程——app/+lib/ 源码自包含骨架（lib 种子本地优先、按 manifest 回源，自持基线 48 文件/DP 238）、UI4Theme 38 令牌与 UI4.Font.* 排印键、开工前四挡决策（明暗/分发/套装与局部换肤/设置按钮与面板内容）、设置面板（应用信息/配色/字体/全局缩放，kv1 落盘与 ZoomedSize 下限）、启动顺序与 DWM 标题栏、UI4 控件用法（对话框/托盘/代码编辑器、菜单长文字截断、GridView 横向固定、NavigationView ItemFontSize）、官方 WPF TabControl+TabItem 左栏可滚页签模板（assets/templates/cases，含 TabItem.Margin 双扣导致底部圆角被裁的修复）、卡片网格拖动排序（八角色、PART_ItemRoot、最近槽位、ObservableCollection.Move+FLIP）、自适应当编码期约束、间距/阴影/悬浮余量、单文件两档发布与 --selftest 门禁、FileVersion 守门、字母像素图标生成、T0Level 八节文档与目录收敛、既有工程修 bug/优化的 5.1–5.3 三步流程（分析→最小化修改+自检→当日修复清单）、lib 改动回灌种子/重钉清单/三工程同步。当需要新建 .NET 10 WPF 应用、写/改 UI4* 的 XAML/C#、加设置页/主题/字号缩放、切主题或调字号后某处没跟着变、DynamicResource 解析不到、组件源码缺失、深色对比度不对、打包 WPF 单 exe、补上手文档或收敛工程、在既有 StartUI4 工程修缺陷/做优化时使用；不用于 WinForms、UWP/WinUI、.NET Framework 48 版 StartUI4 或不含该库的普通 WPF 页面。
 ---
 
 # StartUI4.WPF 桌面应用搭建与组件使用
@@ -28,6 +28,7 @@ StartUI4Controls 是**零 XAML** 的 WPF 组件库：39 个 `UI4*` 控件的模�
 - 要给应用加**设置面板**：明暗档切换、字体族与字号、全局缩放、"关于/应用信息"，或反过来要把这些能力补进一个已有窗口（Step 4.5 有整条通路与自测）。
 - 用户报"字号调大后按钮里的字跑偏 / 设置里恢复默认后下拉框空白 / 缩放后窗口拖不动"这类观感问题（多数不是渲染 bug，而是钉死尺寸、层级抹平、ComboBox 清空列表外值这三条机制）。
 - 托盘图标、原生标题栏染色、代码编辑器、右键菜单这类系统集成面。
+- 要用官方 WPF `TabControl` + `TabItem` 做左侧可滚页签（固定页签 + 内容区，保留键盘与自动化语义）：复制 `assets/templates/cases/OfficialTabCase.xaml(.cs)`；`TabItem` 不要用 `Margin` 做间隔（会触发布局裁剪切掉底部圆角），细则与验收见 `references/host-integration.md` 的「官方 WPF TabControl + TabItem」。
 - 要在 `UI4GridView` 或任意卡片网格上做**拖动排序**（卡片跟手、其余卡片让位动画、首尾/空隙任意落点、松手才落盘），或遇到"松手页面跳一下 / 拖动只在卡片上生效 / 拖动后悬浮放大失效"：照「实战场景：卡片网格拖动排序（组件内通用方案）」的八角色契约与七步做。
 - 组件源码目录是空目录或缺文件（`assets/seed/lib`、或既有工程的 `lib/`）——跑 `fetch-source.ps1` 按清单补齐，别手工从上游粘文件。
 - 示例工程或用户工程里改了 `lib/` 组件源码，要把改动**并回种子并对齐三个示例工程**：走「源码来源与升级」第 1 条那条链（回灌种子 → 重钉清单 → `LOCAL 48/48` → `references/` 同步 → 反向回灌 → 三工程各 `build` + `--selftest`），别只改一个工程就收工——那样下一个用这个 Skill 生成的工程会把已修掉的缺陷重新领一遍。
@@ -71,13 +72,13 @@ dotnet --list-runtimes | grep WindowsDesktop   # 框架依赖发布要 10.x 在�
 一、`dotnet build` 会 restore `AvalonEdit 6.3.1.120`（lib 唯一第三方依赖），所以要确认 NuGet 源可达；离线机器上先在本机 `dotnet restore` 一次成功再断网。
 
 二、**组件源码从哪来**（种子目录可能是空的，别一上来就当它存在）。种子 `assets/seed/lib` 共 48 个文件
-（44 `.cs` + csproj + LICENSE.txt + README.md 组件手册 + 架构审计报告），`assets/seed/manifest.json` 钉死这 48 条
+（47 `.cs` + csproj + LICENSE.txt + README.md 组件手册 + 架构审计报告），`assets/seed/manifest.json` 钉死这 48 条
 `path + blobSha + size` 与内容计数基线（44 个 `.cs` / 38 个令牌 / **238** 条 DP 声明）；blobSha 是 **LF 归一后的 git blob sha**，与 GitHub contents API 同口径。
 `scripts/fetch-source.ps1` 按三挡办事：
 
 **2026-10-04 起种子是自持基线**（清单 `upstream.baseline.selfHosted = true`）：它比 `fetchedFrom` 那份
 （`WinApp-Skills@5d96442` 的 `componentSourceCode/StartUI4Controls`，该目录已在 main 上删除）多 **14 个文件**的有意改动，
-分两轮：
+分三轮：
 - 第一轮（排印通路与描边）：6 个控件的字面字号改引用 `UI4.Font.Size.*`、`UI4Theme.WriteTokens` 发布三个排印键兜底值、
   `UI4ListView` 两个描边 DP、`UI4NavigationView` 的 `ForEachListBox`、`UI4Panel` 悬浮描边挂令牌、
   `UI4ListBox` 触发器画刷由快照改绑定、手册新增 §4.2.1。
@@ -145,7 +146,7 @@ powershell -NoProfile -ExecutionPolicy Bypass \
 `-Name` 会同时当 `RootNamespace` / `AssemblyName` / 数据目录字面量，要求字母开头、仅字母数字。产物是上面那棵树 + `app/AppIcon.ico`——**默认本地生成，不联网**：`scripts/make-icon.ps1` 用应用名首字母画一张像素点阵图标（16×16 逻辑网格上的 5×7 点阵字母，底色 `#4F6BE8`、字形 `#F7F9FB`，四角削成圆角），一次写出 16/24/32/48/64/128/256 七档 32bpp 帧（256 帧内嵌 PNG）。
 种子完整时全程不联网；种子缺失/不完整时它会先调 `fetch-source.ps1` 回源补齐再建工程（离线机器/CI 上想禁止联网就加 `-Offline`，直连抖动时加 `-Mirror <反代前缀>`）。
 
-判据：stdout 首行 `OK`，并回报 `lib/ 48 个文件`、`占位符替换 22 个文件`、图标那一段 `OK AppIcon.ico letter=<首字母> ... frames=7`、`还差 19 处【模板】`；走过回源会先打 `SEED 已补齐并写回，下次零联网`。产物清单由脚本自己点名（含 `Helpers\Typography.cs`、`Services\SettingsService.cs`/`SettingsCodec.cs`/`ThemeService.cs`、`ViewModels\MainViewModel.cs`、`Views\SettingsOverlay.xaml(.cs)`、`Converters\Converters.cs`），缺一项退 6。非 0 退出码含义：2 名字非法、3 Skill 目录不完整、4 种子有缺口（`-Offline` 下）或回源后仍不完整、5 目标已有 C# 源码（要 `-Force`）、6 产物缺文件、7 占位符没替换干净、8 图标生成失败（`make-icon.ps1` 的自证没过）；回源自身的失败码（2/3/4/5）在它自己的输出里，全败时会把三条通路的失败原因都打出来。
+判据：stdout 首行 `OK`，并回报 `lib/ 48 个文件`、`占位符替换 22 个文件`、图标那一段 `OK AppIcon.ico letter=<首字母> ... frames=7`、`还差 19 处待填标记`；走过回源会先打 `SEED 已补齐并写回，下次零联网`。产物清单由脚本自己点名（含 `Helpers\Typography.cs`、`Services\SettingsService.cs`/`SettingsCodec.cs`/`ThemeService.cs`、`ViewModels\MainViewModel.cs`、`Views\SettingsOverlay.xaml(.cs)`、`Converters\Converters.cs`），缺一项退 6。非 0 退出码含义：2 名字非法、3 Skill 目录不完整、4 种子有缺口（`-Offline` 下）或回源后仍不完整、5 目标已有 C# 源码（要 `-Force`）、6 产物缺文件、7 占位符没替换干净、8 图标生成失败（`make-icon.ps1` 的自证没过）；回源自身的失败码（2/3/4/5）在它自己的输出里，全败时会把三条通路的失败原因都打出来。
 
 生成后立刻编译一次，把 restore 与工具链问题在写业务代码前清掉：
 
@@ -190,6 +191,8 @@ bool isDark = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B < 128;   // 与 UI4Wind
 - `UI4TextBlock`/`UI4Panel`/`UI4ListView` **不是**同名原生类的子类（`ContentControl`/`ContentControl`/`ListBox`），靠名字猜基类会写错 Style/Trigger。
 - `UI4GridView.ItemWidth` 是**算列数的基准单元**，不是卡片宽度；卡片铺满所在列。
 - `UI4Grid.Background` 会被库的 `UpdateBackground()` 直接 `SetValue` 写回渐变，宿主赋的底色在主题切换时丢失。
+
+左栏页签要保留官方 `TabControl`/`TabItem` 的键盘与自动化语义时，用 `assets/templates/cases/OfficialTabCase.xaml` 的完整案例：左侧 `TabPanel` 必须套 `ScrollViewer`，页签间隔写在模板的 4px 间隔行而不是 `TabItem.Margin`。细则与验收见 `references/host-integration.md`。
 
 主窗口骨架（实测可编译可跑）：`ui:UI4Grid` 铺页面渐变 → 内部普通 `Grid` 分行 → 工具条 `ui:UI4Button` + 内容 `ui:UI4Panel`。**不要**自绘标题栏、不要 `WindowStyle=None` + `AllowsTransparency=true`：窗口里出现过 UI4 控件，库就在 `Loaded` 时按 DWM 把原生标题栏染好。完全不含 UI4 控件的窗口要手动 `UI4WindowTitleBar.Apply(win)`，否则它等到下次主题切换才被扫到。
 
@@ -258,7 +261,7 @@ bool isDark = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B < 128;   // 与 UI4Wind
 
 **字号与缩放是两件事，别互相顶替**：
 
-- 字号只带动**读排印键的那些东西**：库里恰好 6 处引用点（`UI4Button`/`UI4TextBox`/`UI4ComboBox`/`UI4ListBox`/`UI4PasswordBox` 读 `Base`，`UI4CodeEditor` 读 `Code`）。`UI4CheckBox.cs:165`、`UI4ListView.cs:256`、`UI4GridView.cs:231`、`UI4Menu`（13）等把字号写成了本地字面值，**既不跟键也不跟 `Window.FontSize` 继承**；要它们跟着就显式赋 `FontSize="{DynamicResource UI4.Font.Size.Base}"`（赋了即退订，之后不再跟键）。宿主自己的 `TextBlock` 一律绑层级键。
+- 字号只带动**读排印键的那些东西**：库里恰好 6 处引用点（`UI4Button`/`UI4TextBox`/`UI4ComboBox`/`UI4ListBox`/`UI4PasswordBox` 读 `Base`，`UI4CodeEditor` 读 `Code`）。`UI4CheckBox.cs:165`、`UI4ListView.cs:273`、`UI4GridView.cs:248`、`UI4Menu`（13）等把字号写成了本地字面值，**既不跟键也不跟 `Window.FontSize` 继承**；要它们跟着就显式赋 `FontSize="{DynamicResource UI4.Font.Size.Base}"`（赋了即退订，之后不再跟键）。宿主自己的 `TextBlock` 一律绑层级键。
 - 缩放是整棵子树：`<Grid.LayoutTransform><ScaleTransform ScaleX="{Binding ZoomFactor}" …>` 挂在根内容上。三条代价：① `LayoutTransform` 先把可用尺寸除以系数再交给子树，所以放大**不裁切**，只是窗里能看见的设计像素变少；② 窗口下限必须跟着长，否则"已经是最小尺寸"的窗口装不下变宽的内容——`MinWidth`/`MinHeight` 走 `ZoomedSize` 按 `设计值 × 系数` 折算并**钳到工作区**（不然 200% 档下下限会超过屏幕）；③ **WPF 的 `Popup` 住在自己的可视根里，不吃祖先 `LayoutTransform`**——`UI4ComboBox` 下拉与 `UI4ContextMenu` 右键菜单在 150%/200% 下仍按 100% 渲染（位置对、字不跟着大）。这是 WPF 机制不是库缺陷，默认**不补偿**，但要把这条写进交付文档的"已知边界"让用户自己判断观感。
 
 **状态与落盘的四条规矩**：
@@ -460,7 +463,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 
 ## Step 8 — `doc/运行与构建（T0Level）.md`（新工程必交）
 
-`scaffold.ps1` 会把模板落到 `<proj>\doc\运行与构建（T0Level）.md`，脚本结尾会打印还剩多少处 `【模板】`。**构建与验收通过后必须逐条填**，这是给"从没碰过这个工程的人"的上手文档：
+`scaffold.ps1` 会把模板落到 `<proj>\doc\运行与构建（T0Level）.md`，脚本结尾会打印还剩多少处待填标记（模板里是中文方括号包住的“模板”二字）。**构建与验收通过后必须逐条填**，这是给"从没碰过这个工程的人"的上手文档：
 
 八个小节缺一不可 —— **0 前置要求 / 1 项目启动（首次构建）/ 2 本地调试 / 3 打包与启动 / 4 修改标题 / 5 修改图标 / 6 发布 / 分发 / 7 注意事项**。
 
@@ -468,7 +471,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 
 1. 每条 powershell 命令都要在本机跑过，并把**真实输出**原样贴进该节的"实测输出"代码块。
 2. 没跑或跑不了的行，显式写 `未验证` ＋ 原因（缺工具/缺权限/离线机器），并在第 7 节末尾的"未验证项汇总"里列全。
-3. 不许出现想象中的命令与想象中的输出；交付前 `【模板】` 残留数必须为 0（`Select-String -Path doc\运行与构建（T0Level）.md -Pattern '【模板】' -SimpleMatch`）。
+3. 不许出现想象中的命令与想象中的输出；交付前待填标记残留数必须为 0（模板里是中文方括号包住的“模板”二字，用模板文件里的实际字符串跑 `Select-String`）。
 
 模板里已经写好判据的点：9 条 lib 警告（非增量口径）、`--selftest` 退出码 = 失败断言数（三段、实测 67 条 PASS，报告尾那行 `INFO` 就是字号阶梯与固定件尺寸的实测值——文档里要抄数字就抄它，别手抄）、两档产物各自只有 1 个 exe、`FileVersion` 守门、图标要取回内嵌位图逐像素比（体积相同完全正常，4286 B 对 4286 B 实测过）、以及"拿上一轮产物验本轮改动 = 假红"。第 2 节的窗口验收判据已经写成"齿轮 → 面板 → 每档改观感 + 字号带动整窗 + 缩放不裁切"，第 7 节注意事项里要把 Step 4.5 的**已知边界**（弹层不跟缩放）与第 4 挡的四项决策一并写上。第 5 节的图标命令写 `<skill>/scripts/make-icon.ps1`（本地生成、自带自证，输出那七行 `frame …` 就是实测输出）；`magick -define icon:auto-resize=…` 只在装了 ImageMagick 的机器上才写，没装就保持 `未验证` 并给原因，别照抄成已验证。
 
@@ -528,7 +531,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 - **不回改已落盘的条目**：要更正就在当天新增一条，并在新条目里点名更正了哪一条（例"更正本清单第 2 条的成因"）。禁止对旧条目做挤牙膏式多轮补丁。
 - 只有被证实是**库级共性缺陷**（不是宿主个例）才升级进 `references/` 与组件手册，并按「源码来源与升级」重钉清单；个例只进当日清单。
 - Step 8 的"八节缺一不可"只约束 T0Level 上手文档，**不要**把清单塞进那八节；但清单里引用的命令与输出同样必须是真的。
-- 当日清单**不进** `scaffold.ps1` 的产物点名清单（那里的 `22 个文件` / `还差 19 处【模板】` 是实测计数，加文件就要重跑全链），它由本轮修复按需创建；Step 9 的目录收敛把 `doc/` 下的清单当"文档"类保留。
+- 当日清单**不进** `scaffold.ps1` 的产物点名清单（那里的 `22 个文件` / `还差 19 处待填标记` 是实测计数，加文件就要重跑全链），它由本轮修复按需创建；Step 9 的目录收敛把 `doc/` 下的清单当"文档"类保留。
 - Step 6 的发布门禁不因本流程豁免：真要出包时 `--selftest` 仍要全绿——那是发布门禁，不是每轮修复的主动测试，也不要把门禁扩成"每次小改都跑两档 `publish`"。
 - 报告（只在对话里给）：改了什么（`文件:行`）、5.1 的验收标准逐条落在哪、目测项与遗留项、当日清单的路径。报告不阻塞下一轮；用户指出问题时另起一轮 5.1，并按上一条在当天清单里追加更正条目。
 
@@ -567,7 +570,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 | `<ui:UI4NavigationView ItemFontSize="…">` 报 MC3072，或旧工程里 `UI4NavigationViewItem.ItemFontSizeProperty` 报 CS0117 | 那个 DP 曾登记在错误的宿主类上（字段写在 `…Item` 里、`ownerType` 却指本控件） | 基线已把它挪回 `UI4NavigationView`（`UI4NavigationView.cs:348`）；XAML 侧直接写，代码侧改指 `UI4NavigationView.ItemFontSizeProperty`（示例项目2 本轮就是这么被连带出的） |
 | 导航项字号调大后标签只剩一个字、左栏加宽没用 | 项容器曾钉死 70×70、内部图标+标题栈 60×60、标题还钉 `MaxWidth=76` | 基线改成 `Width` 绑 `LeftPanelWidth` + `MinHeight=70` + `MinWidth`/`MinHeight=60` 并去掉 `MaxWidth`；想让项变窄就设 `LeftPanelWidth`，截断交给 `TextTrimming` |
 | 读屏 / 自动化枚举不到左栏导航项（右栏内容也一起消失） | 模板里没有 `ItemsPresenter`，默认 `ItemsControlAutomationPeer` 既找不到自己的项容器、又顶掉了可视子枚举 | 基线 `OnCreateAutomationPeer` 返回 `FrameworkElementAutomationPeer`（`:680`）；这一面只能看 UIA 树，截图证不住 |
-| `UI4GridView` 列宽随文案长短抖动、下方冒横向滚动条 | 内部 ScrollViewer 曾 `HorizontalScrollBarVisibility=Auto`：无限宽测量让 `UniformGrid` 按子项期望宽度分列，而不是按视口 | 基线固定 `Disabled`（`:400`，与同族 `UI4ListView.cs:353` 一致）；宿主别在 `ScrollViewer + 无宽度约束的 StackPanel` 里放它，那等于把约束又还给无限宽 |
+| `UI4GridView` 列宽随文案长短抖动、下方冒横向滚动条 | 内部 ScrollViewer 曾 `HorizontalScrollBarVisibility=Auto`：无限宽测量让 `UniformGrid` 按子项期望宽度分列，而不是按视口 | 基线固定 `Disabled`（`:417`，与同族 `UI4ListView.cs:370` 一致）；宿主别在 `ScrollViewer + 无宽度约束的 StackPanel` 里放它，那等于把约束又还给无限宽 |
 | 模板里写了 `SelectionChanged="…"` 却没接上，或构造 `Application.Resources` 时炸 | XAML 事件处理器按「这段 XAML 的宿主类」解析：模板放进 `App.xaml` 时宿主类是 `App`，主窗口里的方法根本对不上 | 带处理器的 `DataTemplate` 放 `MainWindow.xaml` 的 `Window.Resources`，`App.xaml` 只留转换器（`host-integration.md` 六条硬约束第 6 条；示例项目3 的 `App.xaml` 注释里记着这条） |
 | 拖动排序松手页面跳一下 / 卡片整体重排 | 提交走了 `Refresh()`（Reset），或带排序的视图忽略了底层 Move | 有序视图改用 `ObservableCollection<T>` + `Move`，松手不 Refresh；见「实战场景：卡片网格拖动排序」 |
 | 拖动只在压到某张卡上才生效，首格前/末格后/空隙丢失 | 用 `InputHitTest` 找卡，空隙没有卡 | 落点改"最近槽位"（`LayoutInformation.GetLayoutSlot` + 面板偏移）；见「实战场景」 |
@@ -590,7 +593,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 7. 图标：`[System.Drawing.Icon]::ExtractAssociatedIcon(<exe>)` 取回内嵌位图，按图样的特征取色点逐像素命中（字节数与旧图标相同是正常的，体积不是判据）；生成式图标还要看 `make-icon.ps1` 自己那两条自证——目录帧数与 `frames=7` 对上、16/32 两档 `corner.alpha=0`（圆角透明没被 `<ApplicationIcon>` 吃掉）。
 8. 标题栏底色/文字色随深浅变（Win10 只认深/浅标志，Win11 才染三色，属系统能力差异）。
 9. 按 Step 9 收敛目录后，两条判据都过（删完中间物仍能一把重建、已打包 exe 不依赖它们）。
-10. `doc/运行与构建（T0Level）.md` 八节齐全、`【模板】` 残留为 0、每条命令都贴了真实输出、未验证项都有原因（Step 8）。
+10. `doc/运行与构建（T0Level）.md` 八节齐全、待填标记残留为 0、每条命令都贴了真实输出、未验证项都有原因（Step 8）。
 11. 间距：Step 3 的静态扫描**输出为空**（`Margin/Padding` 全在 4 的倍数上），截图上相邻控件看得见留白、卡片投影四边完整、鼠标扫过卡片有放大反馈（没反馈＝`ItemMargin` 贴边，见故障速查）。
 12. 设置面板（做了第 4 挡才要跑）：齿轮开得起来，完成 / 遮罩 / Esc 三种关法都关得掉；四节齐全且**改了就立即生效**（配色整窗连标题栏、字号带动层级与圆钮尺寸、缩放不裁切）；关掉面板后 `%APPDATA%\<App>\settings.json` 里看得见的值就是刚选的那套，重启仍是它；把字号拉到 28、缩放拉到 200% 看一遍截断与窗口下限，再回到默认。判据：`FontSize="[0-9]` 静态扫描为空 + 排印段全绿，其余目测（Step 4.5 末）。
 13. 种子没被改动过：`fetch-source.ps1` 打 `LOCAL 48/48 种子完整，未联网`，且 `git status` 里 `assets/seed/lib` 干净。改过 `lib/` 就要走"源码来源与升级"的第 2 步重钉清单，否则下一个工程会被 sha 校验挡在退 5。
@@ -615,7 +618,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 | `fetch-source.ps1`（默认挡） | `LOCAL 48/48 种子完整，未联网` | 种子自持基线，零请求 |
 | `fetch-source.ps1 -Refresh` | `FAIL -Refresh 被挡…` 退 `2` | 缺 `-AllowUpstreamReset` 时的默认行为 |
 | 同上加 `-AllowUpstreamReset` 指临时目录 | 通路 A `629,603 B` → 拷 `47/48` + raw 补 `12` → `FAIL 取回后校验不过，11 处` 退 `5` | 证两件事：通路可达，且旧上游确实与自持基线差那 11 个文件（**这是第一轮时点**；第二轮把菜单与导航/网格的改动并进来之后是 14 处，见下表） |
-| `scaffold.ps1` 新工程 | `占位符替换 22 个文件`、`还差 19 处【模板】`、图标 `frames=7` 104,448 B | `-Offline` 全程零联网 |
+| `scaffold.ps1` 新工程 | `占位符替换 22 个文件`、`还差 19 处待填标记`、图标 `frames=7` 104,448 B | `-Offline` 全程零联网 |
 | 新工程 `dotnet build --no-incremental` | `0 个错误 / 9 个警告`，2.1–2.6 s | Debug；9 条仍是 lib 自带 |
 | 新工程 `--selftest` | 退出码 `0`，`67 PASS` + 1 行 `INFO` | `Policy` 填 `both` 与 `light-only` 两种都跑过（后者同样 67 PASS） |
 | 同样工程 `Policy = "TODO"` | 退出码 `1`，唯一一条 FAIL 是"明暗策略已显式决策" | 说明门禁只挡该挡住的，排印段不误红 |
@@ -650,11 +653,12 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 
 - `references/controls.md` — 39 控件选型表、与原生类的继承关系差异、**不接主题的 19 个颜色 DP**、字号与字体族那 6 处引用点、逐条实测过的限制（含 `Popup` 不吃 `LayoutTransform`、`UI4ListBox` 触发器画刷走绑定、菜单长文字截断三件套、`UI4GridView` 横向固定不滚、`UI4NavigationView` 项尺寸与 UIA）。
 - `references/theming.md` — 38 令牌与资源键规则、**排印键 `UI4.Font.*` 与两层覆盖**、`UI4Theme`/`UI4ThemeScope`/`UI4ThemePacks` API、8 套预置键与场景、系统跟随与持久化、DWM 标题栏四条通路。
-- `references/host-integration.md` — app 侧契约：csproj 双侧关键行、`app.manifest` DPI 逐字、**启动序列九步六条硬约束（含排印覆盖要在装字典之后、带事件处理器的模板要住在本 XAML 的宿主里）**、宿主配色单源→令牌的写法、设置底座六个文件的职责、自测契约（配色 / 设置 / 排印三段各钉什么，含三个示例项目各自的断言规模）、图标三处通路。
+- `references/host-integration.md` — app 侧契约：csproj 双侧关键行、`app.manifest` DPI 逐字、**启动序列九步六条硬约束（含排印覆盖要在装字典之后、带事件处理器的模板要住在本 XAML 的宿主里）**、宿主配色单源→令牌的写法、设置底座六个文件的职责、自测契约（配色 / 设置 / 排印三段各钉什么，含三个示例项目各自的断言规模）、图标三处通路、官方 WPF `TabControl` + `TabItem` 左栏可滚页签的三条硬约束与验收。
+- `assets/templates/cases/OfficialTabCase.xaml(.cs)` — 官方 WPF `TabControl` + `TabItem` 的左栏可滚页签完整案例（13 页、keyed 样式、4px 间隔行、`UI4ScrollViewer`）；复制到 `app/Views/` 后替换 `__APPNAME__`。细则与验收见 `references/host-integration.md` 的「官方 WPF TabControl + TabItem」。
 - `示例项目3（Windows快捷工具面板）/QuickPanel` — 随 Skill 附带的完整参考实现，也是「实战场景：卡片网格拖动排序（组件内通用方案）」的首个落地实例；该场景在 `README.md` §11–§12、`app/MainWindow.xaml`（手柄标记 + Preview 事件）、`app/MainWindow.xaml.cs`（拖动管线与 FLIP）、`ViewModels/ToolSection.cs`（有序集合 + `MoveFavoriteItem`）、`ViewModels/MainViewModel.cs`（`CommitFavoriteReorder`）、`Services/SettingsService.cs`（`MoveFavoriteToIndex`）。
 - `assets/seed/lib/` — 组件源码整份自包含，**48 个文件** = 44 个 `.cs`（含 `Internal/` 6 个）+ `StartUI4Controls.csproj` + `LICENSE.txt` + `README.md`（组件手册，随工程进 `lib/`）+ `架构审计报告-3.0.0主题机制评审.md`（主题通路的实测数据）。**自 2026-10-04 起它是自持基线**：源自仓库内三个示例工程 `lib/` 的并集，比清单 `fetchedFrom` 那份上游目录（commit `5d96442a` 的 `componentSourceCode/StartUI4Controls`，main 上已删）多 14 个文件的有意改动。文件按 LF 存。改它必须同步三个示例工程 + 重钉清单 + 回灌 `references/`（见"源码来源与升级"）。
 - `assets/seed/manifest.json` — 上述 48 条 `path + blobSha + size` 与内容计数基线（`.cs` 44 / 令牌 38 / **DP 238**），回源与校验都以它为准；`upstream.baseline` 段记着自持基线的来源、偏离清单（14 个文件）与放行条件。
-- `assets/templates/app/`、`assets/templates/root/` — 工程模板，`__APPNAME__` 为占位符（`.md` 也参与替换）。配色侧：`Helpers/Theme.cs`（单源 + **必须显式决策的 `Policy`**）。设置侧（Step 4.5）：`Helpers/Typography.cs`、`Services/SettingsService.cs` + `SettingsCodec.cs`、`Services/ThemeService.cs`、`ViewModels/MainViewModel.cs`、`Views/SettingsOverlay.xaml(.cs)`、`Converters/Converters.cs`、`MainWindow.xaml` 的齿轮 + 遮罩 + `LayoutTransform` + Esc。门禁侧：`Services/SelfTest.cs`（三段、实测 67 条）。app csproj（`<Version>0.1.0</Version>` 是 FileVersion 守门的基准）、`root/doc/运行与构建（T0Level）.md`（Step 8 的八节骨架，随 scaffold 落进工程，`【模板】` 标记为待填位）。
+- `assets/templates/app/`、`assets/templates/root/` — 工程模板，`__APPNAME__` 为占位符（`.md` 也参与替换）。配色侧：`Helpers/Theme.cs`（单源 + **必须显式决策的 `Policy`**）。设置侧（Step 4.5）：`Helpers/Typography.cs`、`Services/SettingsService.cs` + `SettingsCodec.cs`、`Services/ThemeService.cs`、`ViewModels/MainViewModel.cs`、`Views/SettingsOverlay.xaml(.cs)`、`Converters/Converters.cs`、`MainWindow.xaml` 的齿轮 + 遮罩 + `LayoutTransform` + Esc。门禁侧：`Services/SelfTest.cs`（三段、实测 67 条）。app csproj（`<Version>0.1.0</Version>` 是 FileVersion 守门的基准）、`root/doc/运行与构建（T0Level）.md`（Step 8 的八节骨架，随 scaffold 落进工程，待填位用中文方括号标记）。
 - `scripts/scaffold.ps1` — Step 1 的生成器（已实测：空种子 → 自动回源 → 生成 → `dotnet build` 0 错误 9 条 lib 警告 → `--selftest` 退 0 共 67 条 PASS；种子完整时加 `-Offline` 零联网。产物点名清单含设置底座那 8 个文件，缺一项退 6）。
 - `scripts/make-icon.ps1` — 应用图标生成器（Step 7）。`-Name` 取首字母、`-Glyph` 显式指定，`-Back`/`-Fore` 换色，`-Sizes` 换尺寸集；输出 16/24/32/48/64/128/256 七帧 32bpp ICO（<256 走 DIB + AND 掩码，256 走内嵌 PNG），写完自己回读目录与 16/32 两档像素做自证。已实测：脚手架产出的工程 `dotnet build` 后 `ExtractAssociatedIcon` 取回 32×32，圆角 `alpha=0`、字形与底色取色命中。
 - `scripts/fetch-source.ps1` — 种子的取源器（三挡 + 四条通路 + blob sha 校验，已实测 A 通路 629,603 B 取齐 48 个文件、第二次跑命中本地不发请求）。`-Refresh` 默认被自持基线闸门挡下（退 2），`-AllowUpstreamReset` 才放行。
@@ -668,7 +672,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
    改动的 .cs / README.md → assets/seed/lib（种子统一存 LF：源是工程侧 CRLF 文件时先 sed 's/\r$//'）
    → make-manifest.ps1（重钉 blob sha 与 expected 计数，它会报"多少个文件、令牌几个、DP 几条"）
    → fetch-source.ps1（默认挡，应打 LOCAL 48/48；加 -Offline 也应同结果）
-   → 同步 references/：component-manual.md ← lib/README.md 逐字（重抄后 cmp 一次）；
+   → 同步 references/component-manual.md ← lib/README.md 逐字（重抄后 cmp 一次）；
      controls.md/theming.md/host-integration.md 里被改动的表（令牌数、DP 数、套装键、不接主题的 DP 清单）
      与**被搬运过的源码行号引用**（例：UI4ListBox 加了 DP 之后，排印键那行从 :239 变 :251，手册与两处 reference 都要跟）
    → 反向回灌三个示例工程的 lib/：只写内容真变的文件，行尾按各文件在 HEAD 里的口径办
@@ -676,7 +680,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
    → 三个工程各 dotnet build --no-incremental（0 错误 / 9 警告）+ --selftest（退 0）
      —— 报 CS0117 一类"DP 找不到"通常是宿主引用了搬过家的 DP，属预期连带面，改引用即可
    ```
-   偏离要**记账**：改了什么、为什么、涉及几个文件，写进清单的 `upstream.baseline`（`divergentFiles` / `divergentList`）与工程侧的归因文档，别让下一轮靠版本号猜——同一份 `3.0.0` 可以挂两套源码。清单里那个数要**实测**取，别加减法推：本轮把 `devSource` 改成三个示例工程并把 `divergentFiles` 钉到 14 之后，用 `-Refresh -AllowUpstreamReset` 指临时目录复跑校验，报的就是 `14 处`，逐文件比 `git hash-object` 也是 14 个。
+   偏离要**记账**：改了什么、为什么、涉及几个文件，写进清单的 `upstream.baseline`（`divergentFiles` / `divergentList`）与工程侧的归因文档，别让下一轮靠版本号猜——同一份 `3.0.0` 可以挂两套源码。清单里那个数要**实测**取，别加减法推：2026-10-04 把 `devSource` 改成三个示例工程并把 `divergentFiles` 钉到 14 之后，用 `-Refresh -AllowUpstreamReset` 指临时目录复跑校验，报的就是 `14 处`，逐文件比 `git hash-object` 也是 14 个。
 2. **上游组件仓库真改版了**：先逐文件比"上游 vs 种子"，决定每一条并到哪边（弃的要有可复现的理由），再 `make-manifest.ps1 -Repo MagicFollower/StartUI4.WPF -Branch dotnet_10 -Commit <40 位> -PathPrefix src/StartUI4Controls` 把 `fetchedFrom` 重钉到那份**存在**的目录，并把 `upstream.baseline` 的偏离清单改小（并光了就把 `selfHosted` 去掉，闸门自动放行）。
 3. **离线机器或三条通路全败**：从任一已知良好的工程的 `lib/` 整份拷进种子（48 个文件全要，含 `Internal/` 与两份文档），再走第 1 条的"重钉之后"那几步。
 

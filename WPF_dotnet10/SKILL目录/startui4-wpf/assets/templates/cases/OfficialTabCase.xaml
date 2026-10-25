@@ -1,0 +1,115 @@
+<UserControl x:Class="__APPNAME__.Views.OfficialTabCase"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:StartUI4Controls;assembly=StartUI4Controls"
+             FontFamily="{DynamicResource UI4.Font.Family}"
+             FontSize="{DynamicResource UI4.Font.Size.Base}">
+
+    <!-- 官方 WPF TabControl + TabItem 的左栏可滚页签案例。
+         依赖宿主已按 skill 的启动序列注册主题与排印键；复制到 app/Views/ 后把 __APPNAME__ 换成工程名。 -->
+
+    <UserControl.Resources>
+        <!-- keyed 样式 + ItemContainerStyle：不要做成隐式 TabItem 样式，避免同窗口其它原生 TabControl 被一起换肤。 -->
+        <Style x:Key="OfficialTabControlStyle" TargetType="TabControl">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid KeyboardNavigation.TabNavigation="Local">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <!-- 左侧 TabPanel 自身不滚动；页签多、字号大或缩放高时会裁掉下面几页，套滚动容器才滚得到。 -->
+                            <ui:UI4ScrollViewer Grid.Column="0" Focusable="False"
+                                                AutomationProperties.AutomationId="OfficialTabStrip"
+                                                VerticalScrollBarVisibility="Auto"
+                                                HorizontalScrollBarVisibility="Disabled">
+                                <TabPanel x:Name="HeaderPanel" IsItemsHost="True" Panel.ZIndex="1"
+                                          KeyboardNavigation.TabIndex="1" Background="Transparent"/>
+                            </ui:UI4ScrollViewer>
+                            <ContentPresenter x:Name="PART_SelectedContentHost" Grid.Column="1"
+                                              ContentSource="SelectedContent"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="OfficialTabItemStyle" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource UI4.Brush.Text}"/>
+            <Setter Property="Background" Value="{DynamicResource UI4.Brush.Surface}"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="MinWidth" Value="140"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <!-- 间隔必须留在模板里：TabPanel 按去掉 Margin 的期望高度排位置，
+                             ArrangeCore 会再扣一次 TabItem.Margin；Border 少 4px 就触发 layout clip，
+                             选中块的底部圆角会被水平切平。 -->
+                        <Grid Background="Transparent">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="4"/>
+                            </Grid.RowDefinitions>
+                            <Border x:Name="Bd" Grid.Row="0" Background="{TemplateBinding Background}"
+                                    BorderBrush="{DynamicResource UI4.Brush.BorderNormal}"
+                                    BorderThickness="0,0,0,1"
+                                    Padding="{TemplateBinding Padding}" CornerRadius="8">
+                                <ContentPresenter ContentSource="Header" HorizontalAlignment="Left"
+                                                  VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource UI4.Brush.HoverOverlay}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource UI4.Brush.Accent}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource UI4.Brush.OnAccent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 页面内容模板只服务这个案例；真实工程把 TabItem.Content 换成页面视图即可。 -->
+        <DataTemplate x:Key="OfficialTabPageTemplate">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="16" MaxWidth="720" HorizontalAlignment="Left">
+                    <ui:UI4TextBlock Text="{Binding}" FontSize="{DynamicResource App.Font.Size.Icon}"/>
+                    <ui:UI4TextBlock Text="这是页面内容区的占位模板。把 TabItem.Content 换成真实视图，样式与 ItemContainerStyle 不用动。"
+                                   Foreground="{DynamicResource UI4.Brush.TextMuted}" TextWrapping="Wrap"
+                                   Margin="0,8,0,0"/>
+                    <ui:UI4TextBlock Text="左栏页签在高度不足时独立滚动；内容区各自滚动，两个方向别混。"
+                                   Foreground="{DynamicResource UI4.Brush.TextMuted}" TextWrapping="Wrap"
+                                   Margin="0,8,0,0"/>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <TabControl x:Name="Tabs" TabStripPlacement="Left"
+                    Style="{StaticResource OfficialTabControlStyle}"
+                    ItemContainerStyle="{StaticResource OfficialTabItemStyle}"
+                    Background="Transparent" BorderThickness="0"
+                    FontSize="{DynamicResource App.Font.Size.Small}"
+                    AutomationProperties.AutomationId="OfficialTabs">
+            <TabItem Header="概览" Content="概览" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="按钮" Content="按钮" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="输入" Content="输入" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="列表" Content="列表" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="导航" Content="导航" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="布局" Content="布局" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="对话框" Content="对话框" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="菜单" Content="菜单" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="主题" Content="主题" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="剪贴板" Content="剪贴板" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="设置" Content="设置" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="关于" Content="关于" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+            <TabItem Header="帮助" Content="帮助" ContentTemplate="{StaticResource OfficialTabPageTemplate}"/>
+        </TabControl>
+    </Grid>
+</UserControl>

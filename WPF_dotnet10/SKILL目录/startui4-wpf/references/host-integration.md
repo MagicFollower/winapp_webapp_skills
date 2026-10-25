@@ -168,6 +168,39 @@ bool isDark = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B < 128;
 
 代码里现取资源要兜底：`Application.Current.FindResource("UI4.Brush.Surface")` 对**缺失键抛异常**（不是返回 null），所以 `(Brush)Current.FindResource(...) ?? Brushes.White`。这类 `DialogHelper` 在 `Application.Current` 为 null 时（自测分支、单元钩子）不能进。
 
+## 官方 WPF TabControl + TabItem：左栏可滚页签
+
+适用：左侧固定页签 + 右侧内容区，且要保留官方 `TabControl`/`TabItem` 的键盘导航（Ctrl+Tab、方向键）、`SelectedContent` 语义与自动化树。**不要**换成 `UI4Tab`（浏览器式、可关闭/新增）或 `UI4NavigationView`（导航视图模型）来做这件事；它们解决的是另一类需求。
+
+模板：`assets/templates/cases/OfficialTabCase.xaml` + `.xaml.cs`。复制到 `app/Views/`，把 `__APPNAME__` 换成工程名；`x:Class`、代码后置命名空间与宿主引用一起改。样式是 keyed 的，`TabControl` 用 `ItemContainerStyle` 挂上去；不要做成隐式 `TabItem` 样式，否则同窗口其它原生 `TabControl` 也会被换肤。
+
+宿主必须给一个有界高度（`Grid` 的 `*` 行），放在无高度约束的 `StackPanel` 里左栏拿不到视口，就不会滚：
+
+```xml
+<Grid>
+    <Grid.RowDefinitions>
+        <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <views:OfficialTabCase/>
+</Grid>
+```
+
+三条硬约束：
+
+1. **左侧 `TabPanel` 自身不滚动。** 默认 `TabControl` 的左侧页签在页数多、字号大或 200% 缩放时会直接裁掉下面几页。模板把 `TabPanel` 套进 `UI4ScrollViewer`，`VerticalScrollBarVisibility="Auto"`、`HorizontalScrollBarVisibility="Disabled"`；内容区由每个 `TabItem.Content` 自己的 `ScrollViewer` 滚，两个方向别混。
+2. **页签间隔不要写 `TabItem.Margin`。** WPF `TabPanel` 用 `GetDesiredSizeWithoutMargin` 排位置，`FrameworkElement.ArrangeCore` 又按 `Margin` 扣一次模板根的可用高度；`Border` 的期望高度比实际排入高度多出这个 Margin，触发 layout clip，症状是选中块的**底部两角被水平切平**（100%/字号 12 实测：旧写法槽高 33、实际只画 29，正好差 4；本模板修好后槽高 37 = Border 33 + 间隔 4）。间隔写在模板第二行（`RowDefinition Height="4"`），`TabItem` 的 `Margin` 保持 0。静态判据：这段 XAML 里 `<TabItem ... Margin=` 应为空。
+3. **颜色/字号只走资源键。** 页签底色/文字/选中/悬浮用 `{DynamicResource UI4.Brush.*}`，字号用 `{DynamicResource App.Font.Size.Small}`；工程没有 Typography 时该键不存在，页签会落到 WPF 默认 12，要跟随库兜底就把这里换成 `{DynamicResource UI4.Font.Size.Base}`。`CornerRadius="8"`、`MinWidth="140"`、`Padding="12,8"` 是设计常量；按 4 的倍数调。页签底色是原生 `Border` 的圆弧角。
+
+验收：
+
+- `dotnet build` 0 错误；宿主起窗后第一个页签底部两角与顶部对称（100% 与 200% 各看一次）。
+- 把左栏滚到底能看到最后一页；内容区独立滚动，不出现整页横向滚动条。
+- 切暗档/套装后页签底色、选中态、文字与内容区一起变；标题栏跟随宿主的 DWM 通路。
+- UIA：`OfficialTabs` 下能枚举到 13 个 `TabItem`；键盘导航仍由官方控件处理。
+- 页面内容替换：把 `TabItem.Content` 换成真实视图，`OfficialTabPageTemplate` 只用于案例；样式与 `ItemContainerStyle` 不动。
+
+模板自证（本机探针，900×420、内置 light、13 页、未定义 `App.Font.Size.Small` 所以页签走默认 12）：对着 51 文件种子 lib 与 demo 的 48 文件 lib 各 `dotnet build` 0 错误 / 9 警告；UIA 按 `OfficialTabs` 找到 TabControl、13 个 `TabItem`，槽高 37（Border 33 + 间隔 4）；`UI4ScrollViewer` 的 `ScrollableHeight≈99.48`、`ExtentHeight≈480.48`、`ViewportHeight=381`，`ScrollToEnd()` 后 `VerticalOffset≈99.48`，最后三页可见；渲染图中选中块底部两角为圆角。这组数只证明模板本身，宿主换字体/主题后按上面四条重新看。
+
 ## 对话框与托盘的宿主侧约束
 
 ```csharp
