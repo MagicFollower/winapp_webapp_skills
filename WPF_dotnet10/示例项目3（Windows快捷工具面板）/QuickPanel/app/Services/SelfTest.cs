@@ -835,7 +835,7 @@ namespace QuickPanel.Services
                     && favSec.MatchCaption == "收藏 2 项",
                     "applied=" + applied + " 视图=" + shown + " 计数=" + favSec.MatchCaption);
 
-                // 搜索与收藏叠加时的分母是当前收藏数（2），不是这一节数据源的整表（90）
+                // 搜索与收藏叠加时的分母是当前收藏数（2），不是这一节数据源的整表（91）
                 favSec.SetQuery("notepad");
                 string stacked = favSec.MatchCaption;
                 string stackedHint = favSec.EmptyHint;
