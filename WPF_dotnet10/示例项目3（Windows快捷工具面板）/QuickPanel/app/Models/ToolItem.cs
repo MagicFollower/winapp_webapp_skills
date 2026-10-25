@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 
 namespace QuickPanel.Models
 {
@@ -26,8 +27,12 @@ namespace QuickPanel.Models
     ///
     /// 标签文案在构造时算完（界面只做可见性绑定，不写第二份判断逻辑）：
     /// 「需管理员」「家庭版没有」是 SKU 与权限两件事，必须分列——把 SKU 缺失误报成"要提权"会误导用户。
+    ///
+    /// 只有 IsFavorite 是运行期可变的，所以这个类要实现 INotifyPropertyChanged：
+    /// 同一张卡同时挂在所属分组、「全部工具」与「收藏」三份视图里，一处切换要让几处的
+    /// 「已收藏」标签与那颗星（空心/实心互斥显示）一起跟上。（其余字段仍在构造时定死。）
     /// </summary>
-    public sealed class ToolItem
+    public sealed class ToolItem : INotifyPropertyChanged
     {
         public string Group { get; set; }
         /// <summary>所属分组的左栏标题，由 ToolCatalog 建项时填好（不在绑定里现查，避免 Models 反向依赖 Services）。</summary>
@@ -57,6 +62,25 @@ namespace QuickPanel.Models
         public string ProbeName { get; set; }
 
         public ToolAvailability Availability { get; set; }
+
+        /// <summary>
+        /// 是否已收藏。<b>真源是 SettingsService.Favorites</b>（按命令原文认人，"命令全表唯一"由自测钉住），
+        /// 这里只是给界面读的那一份镜像，只由 ToolCatalog.SyncFavorites 单向写入，模板不直接改它。
+        /// </summary>
+        public bool IsFavorite
+        {
+            get { return _isFavorite; }
+            set
+            {
+                if (_isFavorite == value) return;
+                _isFavorite = value;
+                var handler = PropertyChanged;
+                if (handler != null) handler(this, new PropertyChangedEventArgs(nameof(IsFavorite)));
+            }
+        }
+        private bool _isFavorite;
+
+        public event PropertyChangedEventHandler PropertyChanged;
 
         // ── 界面直接绑的标签文案 ────────────────────────────────────────
         public string PlatformChip

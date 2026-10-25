@@ -232,7 +232,79 @@ namespace QuickPanel.Services
                 hostile3.ThemeKey == "dark" && Math.Abs(hostile3.BaseFontSize - 20) < 1e-9,
                 hostile3.ThemeKey + " / " + hostile3.BaseFontSize);
 
+            // ── 收藏的落盘通路（同一套 kv1 口径）────────────────────────
+            // 一行一项的 fav<序号> 而不是逗号拼接：数据源里「文本服务和输入语言」那条命令
+            // 本身就带逗号（rundll32.exe shell32.dll,Options_RunDLL 7），拼接式在切分时就会切错。
+            var favSrc = new SettingsService();
+            favSrc.ToggleFavorite("taskmgr.exe");
+            favSrc.ToggleFavorite("services.msc");
+            favSrc.ToggleFavorite("cmd /k route print");                          // 带空格
+            favSrc.ToggleFavorite("C:\\Windows\\regedit.exe");                    // 带反斜杠
+            favSrc.ToggleFavorite("rundll32.exe shell32.dll,Options_RunDLL 7");   // 带逗号
+            favSrc.ToggleFavorite("taskmgr.exe");                                 // 再点一次 = 取消收藏
+            var favBack = new SettingsService();
+            favBack.ApplyMap(SettingsCodec.Parse(SettingsCodec.Serialize(favSrc.ToMap())));
+            failed += Check(report, "收藏往返后顺序与内容不变（取消的那条不留痕）",
+                Join(favBack.Favorites) == "services.msc|cmd /k route print|C:\\Windows\\regedit.exe|rundll32.exe shell32.dll,Options_RunDLL 7",
+                "实际 [" + Join(favBack.Favorites) + "]");
+
+            // 写侧键名点名：fav 后面必须是连续序号，这些名字就是磁盘格式的一部分
+            var favKeys = new List<string>();
+            foreach (var kv in favSrc.ToMap())
+                if (kv.Key.StartsWith(SettingsService.FavoriteKeyPrefix, StringComparison.Ordinal)) favKeys.Add(kv.Key);
+            failed += Check(report, "收藏写侧键名是 fav0 起的连续编号",
+                favKeys.Count == 4 && favKeys[0] == "fav0" && favKeys[1] == "fav1"
+                && favKeys[2] == "fav2" && favKeys[3] == "fav3",
+                string.Join(",", favKeys.ToArray()));
+
+            // 手改过的文件要能吃得下：乱序、序号不连续、空值、非法键名、重复项
+            var favHostile = new SettingsService();
+            favHostile.ApplyMap(SettingsCodec.Parse(SettingsCodec.Serialize(new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("fav10", "taskmgr.exe"),
+                new KeyValuePair<string, string>("fav2", "services.msc"),
+                new KeyValuePair<string, string>("fav1", "taskmgr.exe"),
+                new KeyValuePair<string, string>("fav0", "   "),
+                new KeyValuePair<string, string>("favX", "notepad.exe"),
+                new KeyValuePair<string, string>("favorite", "msconfig.exe"),
+                new KeyValuePair<string, string>("fav-1", "cleanmgr.exe")
+            })));
+            failed += Check(report, "手改的收藏表按序号回正、去重、丢空值与非法键",
+                Join(favHostile.Favorites) == "taskmgr.exe|services.msc",
+                "实际 [" + Join(favHostile.Favorites) + "]");
+
+            // 上限：手填 250 条只认前 MaxFavorites 条，别让它吃掉 MaxSettingsBytes 配额
+            var many = new Dictionary<string, string>();
+            for (int i = 0; i < SettingsService.MaxFavorites + 50; i++) many["fav" + i] = "cmd" + i + ".exe";
+            var favCap = new SettingsService();
+            favCap.ApplyMap(many);
+            failed += Check(report, "收藏条数超上限时截断而不是整份吃下",
+                favCap.Favorites.Count == SettingsService.MaxFavorites,
+                "实际 " + favCap.Favorites.Count + " 上限 " + SettingsService.MaxFavorites);
+
+            // 同一条"null / 空 map 不清现值"的不变量要覆盖收藏：文件里没有 fav 键 ≠ 用户清空过收藏
+            var favKeep = new SettingsService();
+            favKeep.ToggleFavorite("taskmgr.exe");
+            favKeep.ApplyMap(null);
+            favKeep.ApplyMap(new Dictionary<string, string>());
+            failed += Check(report, "null / 空 map 不清掉已有收藏",
+                favKeep.Favorites.Count == 1 && favKeep.IsFavorite("taskmgr.exe"),
+                "实际 " + Join(favKeep.Favorites));
+
+            // 返回值口径：回的是"切换后是否在收藏里"，不是"这次加了还是删了"——
+            // 达上限时不加也回 false，调用方拿它回写卡片镜像正好自洽。空白命令不改状态。
+            var favToggle = new SettingsService();
+            failed += Check(report, "ToggleFavorite 回的是切换后是否在收藏中",
+                favToggle.ToggleFavorite("msconfig.exe") && !favToggle.ToggleFavorite("msconfig.exe")
+                && !favToggle.ToggleFavorite("   ") && favToggle.Favorites.Count == 0,
+                "计数=" + favToggle.Favorites.Count);
+
             return failed;
+        }
+
+        private static string Join(IEnumerable<string> values)
+        {
+            return string.Join("|", new List<string>(values).ToArray());
         }
 
         /// <summary>
@@ -490,21 +562,26 @@ namespace QuickPanel.Services
             int failed = 0;
             var items = ToolCatalog.Items;
 
-            // 1) 分组结构：10 个分组，「全部工具」在首位且收录所有项
+            // 1) 分组结构：10 个分组 + 全部工具 + 收藏；「全部工具」在首位且收录所有项
             var sections = ToolCatalog.BuildSections();
-            failed += Check(report, "分组数为 10（不含全部）", ToolCatalog.Groups.Length == 10,
+            failed += Check(report, "分组数为 10（不含全部与收藏）", ToolCatalog.Groups.Length == 10,
                 "实际 " + ToolCatalog.Groups.Length);
-            failed += Check(report, "首位是全部工具且收录完整",
-                sections.Count == ToolCatalog.Groups.Length + 1
+            // 收藏排第二是有意的：左栏第 0 项是启动默认落点，空收藏不该当首屏
+            failed += Check(report, "首位是全部工具、次位是收藏且收录完整",
+                sections.Count == ToolCatalog.Groups.Length + 2
                 && sections[0].Key == ToolCatalog.AllKey
+                && sections[1].Key == ToolCatalog.FavoriteKey
                 && sections[0].Items.Count == items.Length,
-                "sections=" + sections.Count + " 首项=" + sections[0].Key + " 项数=" + sections[0].Items.Count
-                + " vs 总数 " + items.Length);
+                "sections=" + sections.Count + " 首项=" + sections[0].Key + " 次项=" + sections[1].Key
+                + " 项数=" + sections[0].Items.Count + " vs 总数 " + items.Length);
 
-            // 2) 每组容量要适合左栏一屏：5–12 项；总量 ≥ 70
+            // 2) 每组容量要适合左栏一屏：5–12 项（全部与收藏两节跨组，不参与这条）；总量 ≥ 70
             var badSized = new List<string>();
-            foreach (var section in sections.Skip(1))
+            foreach (var section in sections)
+            {
+                if (section.Key == ToolCatalog.AllKey || section.Key == ToolCatalog.FavoriteKey) continue;
                 if (section.Items.Count < 5 || section.Items.Count > 12) badSized.Add(section.Key + ":" + section.Items.Count);
+            }
             failed += Check(report, "每个分组 5–12 项", badSized.Count == 0, string.Join(",", badSized.ToArray()));
             failed += Check(report, "总项数 ≥ 70", items.Length >= 70, "实际 " + items.Length);
 
@@ -615,6 +692,7 @@ namespace QuickPanel.Services
             var badGlyph = new List<string>();
             foreach (var g in ToolCatalog.Groups) if (!IsSinglePua(g.Glyph)) badGlyph.Add(g.Key);
             if (!IsSinglePua(ToolCatalog.AllGlyph)) badGlyph.Add("all");
+            if (!IsSinglePua(ToolCatalog.FavoriteGlyph)) badGlyph.Add("fav");
             failed += Check(report, "分组图标都是单个私有区码位", badGlyph.Count == 0, string.Join(",", badGlyph.ToArray()));
 
             // 13) 卡片上的分组标签：数据源里每项都要带所属分组标题，显示时机由 Section 判定
@@ -705,6 +783,70 @@ namespace QuickPanel.Services
                 onlyIp && idempotent && afterNull == 0,
                 "点亮=" + onCount + " 重复后=" + idempotent + " 未知键后=" + afterNull);
 
+            // 13e) 收藏通路：这一节显示的是"已收藏的那部分卡"，且是同一批引用而不是副本。
+            //      这一段全程直接拨镜像（SyncFavorites），不碰设置文件——落盘那半截由设置段负责。
+            var favSec = sections.Find(s => s.Key == ToolCatalog.FavoriteKey);
+            var taskmgr = FindByCommand(items, "taskmgr.exe");
+            var notepad = FindByCommand(items, "notepad.exe");
+            if (favSec == null || taskmgr == null || notepad == null)
+            {
+                failed += Check(report, "收藏通路可跑", false,
+                    "收藏节或样例卡缺失：fav=" + (favSec == null ? "缺" : "有")
+                    + " taskmgr=" + (taskmgr == null ? "缺" : "有") + " notepad=" + (notepad == null ? "缺" : "有"));
+            }
+            else
+            {
+                ToolCatalog.SyncFavorites(new string[0]);
+                favSec.NotifyFavoritesChanged();
+                failed += Check(report, "无收藏时收藏节是空态，且空态文案给的是「怎么加」",
+                    favSec.HasNoMatches && favSec.EmptyHint.IndexOf("星标", StringComparison.Ordinal) >= 0
+                    && favSec.MatchCaption == "收藏 0 项",
+                    "文案=[" + favSec.EmptyHint + "] 计数=" + favSec.MatchCaption);
+                failed += Check(report, "收藏节跨组，卡片要显示所属分组标签", favSec.ShowGroupTags, "");
+
+                // 目录里已不存在的命令与空白条目：静默忽略，不显示也不报错
+                int applied = ToolCatalog.SyncFavorites(new[] { "taskmgr.exe", "notepad.exe", "input.cpl", "   " });
+                favSec.NotifyFavoritesChanged();
+                int shown = 0;
+                foreach (var o in favSec.ItemsView) shown++;
+                failed += Check(report, "收藏节只放已收藏的两张卡；未知命令与空白静默忽略",
+                    applied == 2 && shown == 2 && taskmgr.IsFavorite && notepad.IsFavorite
+                    && favSec.MatchCaption == "收藏 2 项",
+                    "applied=" + applied + " 视图=" + shown + " 计数=" + favSec.MatchCaption);
+
+                // 搜索与收藏叠加时的分母是当前收藏数（2），不是这一节数据源的整表（90）
+                favSec.SetQuery("notepad");
+                string stacked = favSec.MatchCaption;
+                string stackedHint = favSec.EmptyHint;
+                favSec.SetQuery("绝不存在的词");
+                bool favEmptyHint = favSec.HasNoMatches && favSec.EmptyHint.IndexOf("收藏", StringComparison.Ordinal) >= 0;
+                favSec.SetQuery(string.Empty);
+                failed += Check(report, "收藏节里再搜索：分母按收藏数算，空态仍说收藏",
+                    stacked.Contains("命中 1") && stacked.Contains("共 2 项") && favEmptyHint,
+                    "叠加=[" + stacked + "] 空态=[" + stackedHint + "]");
+
+                // 卡片标签与那颗星只读 IsFavorite 这一个属性：同值不发通知，真变了才发。
+                // 前置状态要显式钉住——上面那次 SyncFavorites 已经把 taskmgr 置成"收藏中"，
+                // 探针若假设自己从未收藏起步，"同值不刷"那一半就量不到（通知数少一次，看着像掉了通知）。
+                int notifications = 0;
+                taskmgr.PropertyChanged += delegate(object s, System.ComponentModel.PropertyChangedEventArgs e)
+                {
+                    if (e.PropertyName == "IsFavorite") notifications++;
+                };
+                taskmgr.IsFavorite = false;   // 复位到已知起点，这一次不计
+                notifications = 0;
+                taskmgr.IsFavorite = false;   // 同值 → 不该发
+                taskmgr.IsFavorite = true;    // 变 → 发 1
+                taskmgr.IsFavorite = true;    // 同值 → 不该发
+                taskmgr.IsFavorite = false;   // 变 → 发 2
+                failed += Check(report, "IsFavorite 只在真变了时发通知（同值不刷）",
+                    notifications == 2, "通知 " + notifications + " 次");
+
+                // 跑完复位：这一段之后还要建主窗口，别把脏镜像留给下面的模板断言
+                ToolCatalog.SyncFavorites(new string[0]);
+                favSec.NotifyFavoritesChanged();
+            }
+
             // 14) 三块模板要能实例化。模板在 Window.Resources 里（模板中的 SelectionChanged 只能解析到
             //     宿主类），所以要先有主窗口实例再查——查不到就退回"右栏一片空白"这种没有异常的症状。
             //     主窗口与设置面板 XAML 能否构造，由排印段末尾那两条负责，这里不重复报。
@@ -720,12 +862,34 @@ namespace QuickPanel.Services
                     CanLoadTemplate(shell.Resources, new System.Windows.DataTemplateKey(typeof(QuickPanel.ViewModels.SectionShell))),
                     "查不到 SectionShell 模板或实例化即抛");
 
+                // 14c) 收藏唯一的入口是卡片右下角那两颗星（空心=加、实心=取消，互斥显示）。
+                //      挂错容器（比如挤进 WrapPanel 的标签流里）表现是"悬浮看不到按钮"，不抛异常，
+                //      所以按结构钉一次：数量、字形、UIA 名字三样都要对。
+                var cardTemplate = shell.Resources["ToolCard"] as System.Windows.DataTemplate;
+                var cardRoot = cardTemplate != null ? cardTemplate.LoadContent() as DependencyObject : null;
+                var stars = new List<UI4Button>();
+                CollectDescendants(cardRoot, stars);
+                var starGlyphs = new List<string>();
+                var starNames = new List<string>();
+                foreach (var star in stars)
+                {
+                    starGlyphs.Add(star.Content as string ?? string.Empty);
+                    starNames.Add(System.Windows.Automation.AutomationProperties.GetName(star) ?? string.Empty);
+                }
+                failed += Check(report, "卡片模板带两颗互斥的星（E734 加 / E735 取消）且都有 UIA 名字",
+                    stars.Count == 2 && starGlyphs.Contains("\uE734") && starGlyphs.Contains("\uE735")
+                    && starNames.Contains("添加至收藏") && starNames.Contains("从收藏移除"),
+                    "按钮数=" + stars.Count
+                    + " 字形=" + string.Join(",", starGlyphs.ConvertAll(g => g.Length == 1 ? ((int)g[0]).ToString("X4") : "空").ToArray())
+                    + " 名字=" + string.Join(",", starNames.ToArray()));
+
                 // 14b) 右栏不重建的前提：每个导航项的 Content 必须是同一个 shell 实例。
                 //      容器报出去的 UIA 名字走"数据项的纯文本"，所以名字要钉在 NavSectionItem.ToString() 上。
                 var navVm = shell.DataContext as QuickPanel.ViewModels.MainViewModel;
                 var navItems = shell.Nav.Items;
+                // 12 = 10 个大类 + 全部工具 + 收藏：左栏项数必须与 Section 数一一对应，多一个少一个都是接线断了
                 bool sharedContent = navVm != null && navVm.Shell != null
-                    && navItems.Count == navVm.Sections.Count && navItems.Count == 11;
+                    && navItems.Count == navVm.Sections.Count && navItems.Count == 12;
                 var badNavName = new List<string>();
                 for (int i = 0; i < navItems.Count; i++)
                 {
@@ -744,6 +908,13 @@ namespace QuickPanel.Services
                     "项数=" + navItems.Count);
                 failed += Check(report, "导航项的 UIA 名字取自分组标题（ToString 通路）", badNavName.Count == 0,
                     string.Join(",", badNavName.GetRange(0, Math.Min(5, badNavName.Count)).ToArray()));
+
+                // 14d) 两颗星绑的命令确实挂在视图模型上，提示条初始收起（只有收藏动作会打开它）。
+                //      这里不调用命令：ToggleFavorite 会落盘，自测不许碰 %APPDATA% 里用户那份文件。
+                failed += Check(report, "视图模型暴露收藏命令且提示条初始收起",
+                    navVm != null && navVm.ToggleFavoriteCommand != null && !navVm.IsToastOpen,
+                    navVm == null ? "主窗口的 DataContext 不是 MainViewModel"
+                        : ("命令=" + (navVm.ToggleFavoriteCommand != null) + " 提示条开着=" + navVm.IsToastOpen));
             }
             catch (Exception ex)
             {
@@ -778,6 +949,21 @@ namespace QuickPanel.Services
             if (string.IsNullOrEmpty(glyph) || glyph.Length != 1) return false;
             char c = glyph[0];
             return c >= '\uE000' && c <= '\uF8FF';
+        }
+
+        /// <summary>
+        /// 收集模板实例化出来的那棵子树里某一类型的全部节点。LoadContent 的树没有走过布局，
+        /// 但可视父子关系已经建好，所以 VisualTreeHelper 能用（走不通时调用方拿到空表并报数）。
+        /// </summary>
+        private static void CollectDescendants<T>(DependencyObject node, List<T> into) where T : DependencyObject
+        {
+            if (node == null) return;
+            var typed = node as T;
+            if (typed != null) into.Add(typed);
+            if (!(node is System.Windows.Media.Visual)) return;
+            int count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(node);
+            for (int i = 0; i < count; i++)
+                CollectDescendants(System.Windows.Media.VisualTreeHelper.GetChild(node, i), into);
         }
 
         private static bool CanLoadTemplate(ResourceDictionary resources, object key)

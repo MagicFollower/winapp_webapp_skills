@@ -38,7 +38,7 @@ namespace QuickPanel
         /// 左栏项必须由 UI4NavigationViewItem 真身进 Items：库在 OnItemsChanged 里按类型分流到
         /// RegularItems / BottomItems，直接往 RegularItems 加不会进左栏，下次 Items 变化还会被整表清空。
         ///
-        /// 十一个项的 Content 都指向同一个 SectionShell 实例（不是各自的分组对象）：右栏绑的就是
+        /// 每个导航项的 Content 都指向同一个 SectionShell 实例（不是各自的分组对象）：右栏绑的就是
         /// SelectedItem.Content，Content 一换整棵子树要重建，而卡片不虚拟化——那正是"切到全部工具卡一下"的成因。
         /// 分组挂在 NavSectionItem.Section 上，切换时只翻各节的 IsActive。
         /// </summary>

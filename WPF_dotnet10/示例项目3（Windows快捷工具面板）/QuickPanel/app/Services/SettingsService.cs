@@ -29,6 +29,21 @@ namespace QuickPanel.Services
         public double WindowTop { get; set; }
         public bool WindowMaximized { get; set; }
 
+        /// <summary>
+        /// 收藏的命令原文，按加入顺序。身份用 Command 而不是标题或索引：命令全表唯一由自测钉住，
+        /// 而索引会在数据源增删项时静默指向另一张卡。
+        /// </summary>
+        public List<string> Favorites { get; private set; }
+
+        /// <summary>收藏落盘的键名前缀，实际键是 fav0 / fav1 …（一行一项，见 ToMap 处的说明）。</summary>
+        internal const string FavoriteKeyPrefix = "fav";
+
+        /// <summary>
+        /// 收藏条数上限。设置文件是用户能自己开编辑器改的，超上限的部分直接丢——
+        /// 与其让一份改坏的文件吃掉 MaxSettingsBytes 配额，不如只认前 200 条。
+        /// </summary>
+        internal const int MaxFavorites = 200;
+
         /// <summary>健康文件约 200 字节；超限即判损坏，避免脏数据拖死启动。</summary>
         internal const int MaxSettingsBytes = 64 * 1024;
 
@@ -134,6 +149,11 @@ namespace QuickPanel.Services
             entries.Add(Pair("windowTop", WindowTop.ToString(ci)));
             entries.Add(Pair("windowMaximized", WindowMaximized ? "true" : "false"));
 
+            // 收藏一行一项、键带序号：kv1 的值原样存不转义，拼接式（逗号分隔）会撞上
+            // 「文本服务和输入语言」那条命令里的逗号，序号键则天然无歧义且能手删中间一行。
+            for (int i = 0; i < Favorites.Count; i++)
+                entries.Add(Pair(FavoriteKeyPrefix + i, Favorites[i]));
+
             return entries;
         }
 
@@ -164,6 +184,102 @@ namespace QuickPanel.Services
             bool flag;
             if (map.TryGetValue("windowMaximized", out value) && bool.TryParse(value, out flag))
                 WindowMaximized = flag;
+
+            // 收藏整表重建而不是增量合并：文件里没有"删掉某一条"的表示法，
+            // 合并会让手删的一行在下次保存时复活。
+            // 但"map 里一个 fav 键都没有"要留着现值不清——那正是"null / 空 map 不清现值"这条不变量；
+            // 用户真的清空过收藏时，落盘的文件本来就没有 fav 键，此时现值来自 Load 开头的 ApplyDefaults。
+            if (HasFavoriteKeys(map)) Favorites = ReadFavorites(map);
+        }
+
+        private static bool HasFavoriteKeys(IDictionary<string, string> map)
+        {
+            if (map == null) return false;
+            foreach (var entry in map)
+            {
+                int index;
+                if (TryFavoriteIndex(entry.Key, out index)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 读侧：只认 <c>fav&lt;非负整数&gt;</c> 这类键，按键尾序号排序后取值。
+        /// 不靠 Dictionary 的枚举顺序——那是没有契约的；手改过的文件（乱序、删了中间一行、
+        /// 序号不连续）也要能按用户看到的顺序回正。空值、重复项与超上限的部分丢弃。
+        /// </summary>
+        internal static List<string> ReadFavorites(IDictionary<string, string> map)
+        {
+            var result = new List<string>();
+            if (map == null) return result;
+
+            var picked = new List<KeyValuePair<int, string>>();
+            foreach (var entry in map)
+            {
+                int index;
+                if (!TryFavoriteIndex(entry.Key, out index)) continue;
+                string command = (entry.Value ?? string.Empty).Trim();
+                if (command.Length == 0) continue;
+                picked.Add(new KeyValuePair<int, string>(index, command));
+            }
+            picked.Sort(delegate(KeyValuePair<int, string> a, KeyValuePair<int, string> b)
+            {
+                return a.Key.CompareTo(b.Key);
+            });
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in picked)
+            {
+                if (result.Count >= MaxFavorites) break;
+                if (seen.Add(entry.Value)) result.Add(entry.Value);
+            }
+            return result;
+        }
+
+        /// <summary>favX / favorite / fav-1 都不算收藏键：宁可少读，也不把手改坏的键当数据吃进来。</summary>
+        private static bool TryFavoriteIndex(string key, out int index)
+        {
+            index = 0;
+            if (string.IsNullOrEmpty(key)) return false;
+            if (key.Length <= FavoriteKeyPrefix.Length) return false;
+            if (key.IndexOf(FavoriteKeyPrefix, StringComparison.Ordinal) != 0) return false;
+            return int.TryParse(key.Substring(FavoriteKeyPrefix.Length), NumberStyles.None,
+                CultureInfo.InvariantCulture, out index) && index >= 0;
+        }
+
+        /// <summary>这一项当前在不在收藏里。命令为空回 false。</summary>
+        public bool IsFavorite(string command)
+        {
+            return IndexOfFavorite(command) >= 0;
+        }
+
+        /// <summary>
+        /// 切换这一项的收藏状态，返回<b>切换后它是否处于收藏中</b>（不是"这次加了还是删了"）：
+        /// 达到 MaxFavorites 时不加，回的就是 false，调用方拿它回写卡片镜像正好自洽。
+        /// </summary>
+        public bool ToggleFavorite(string command)
+        {
+            string key = (command ?? string.Empty).Trim();
+            if (key.Length == 0) return false;
+
+            int at = IndexOfFavorite(key);
+            if (at >= 0)
+            {
+                Favorites.RemoveAt(at);
+                return false;
+            }
+            if (Favorites.Count >= MaxFavorites) return false;
+
+            Favorites.Add(key);
+            return true;
+        }
+
+        private int IndexOfFavorite(string command)
+        {
+            if (string.IsNullOrEmpty(command)) return -1;
+            for (int i = 0; i < Favorites.Count; i++)
+                if (string.Equals(Favorites[i], command, StringComparison.OrdinalIgnoreCase)) return i;
+            return -1;
         }
 
         private static KeyValuePair<string, string> Pair(string key, string value)
@@ -195,6 +311,7 @@ namespace QuickPanel.Services
             WindowLeft = double.NaN;
             WindowTop = double.NaN;
             WindowMaximized = false;
+            Favorites = new List<string>();
         }
 
         /// <summary>只改名不删除，保留用户数据的取证可能。</summary>

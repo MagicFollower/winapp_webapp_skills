@@ -66,6 +66,16 @@ namespace QuickPanel.Services
         public const string AllTitle = "全部工具";
         public const string AllGlyph = "\uE71D";
 
+        /// <summary>
+        /// 「收藏」分组的稳定键。它不在 <see cref="Groups"/> 里（Groups 是数据源自带的十个大类，
+        /// 收藏是用户视图），所以左栏顺序是：全部工具 → 收藏 → 十个大类。
+        /// 收藏排第二而不是第一是有意的：左栏第 0 项是启动默认落点，空收藏不该当首屏。
+        /// </summary>
+        public const string FavoriteKey = "fav";
+        public const string FavoriteTitle = "收藏";
+        /// <summary>空心星。码位是拿 GlyphTypeface 渲出来对着看定的：E734 空心星、E735 实心星，E8FA/E8B0 是"添加用户"与指针。</summary>
+        public const string FavoriteGlyph = "\uE734";
+
         public static readonly ToolItem[] Items =
         {
             // ── 控制面板经典项（.cpl）─────────────────────────────────
@@ -281,8 +291,33 @@ namespace QuickPanel.Services
             // 「全部工具」按分组顺序收全部成员，搜索时它就是"跨组命中"的那一屏
             var all = new List<ToolItem>(Items.Length);
             foreach (var section in sections) all.AddRange(section.Items);
-            sections.Insert(0, new ToolSection(AllKey, AllTitle, AllGlyph, all));
+            sections.Insert(0, new ToolSection(AllKey, AllTitle, AllGlyph, all, true));
+            // 收藏节收的是同一批 ToolItem 引用（不是副本）：状态镜像只有一份，
+            // 在收藏里移除一张卡，它所属分组的那张卡同时就不打标签了。
+            sections.Insert(1, new ToolSection(FavoriteKey, FavoriteTitle, FavoriteGlyph, all, true, true));
             return sections;
+        }
+
+        /// <summary>
+        /// 把设置里那份命令清单打到卡片镜像上（唯一写 IsFavorite 的地方）。
+        /// 目录里已经不存在或命令为空的条目静默忽略——不显示也不报错，收藏是用户数据，
+        /// 不该因为数据源删了一项就在界面上留个报错的洞。返回真正落到卡片上的条数。
+        /// </summary>
+        public static int SyncFavorites(IEnumerable<string> favorites)
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (favorites != null)
+                foreach (string command in favorites)
+                    if (!string.IsNullOrWhiteSpace(command)) set.Add(command.Trim());
+
+            int applied = 0;
+            foreach (var item in Items)
+            {
+                bool on = set.Contains(item.Command);
+                item.IsFavorite = on;
+                if (on) applied++;
+            }
+            return applied;
         }
     }
 }
