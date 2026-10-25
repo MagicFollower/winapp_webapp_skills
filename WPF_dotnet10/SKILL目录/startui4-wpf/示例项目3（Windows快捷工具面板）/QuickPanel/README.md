@@ -102,7 +102,7 @@ flowchart TD
     end
 
     subgraph SVC["服务层（纯逻辑，可被 --selftest 直接出题）"]
-        CAT["ToolCatalog<br/>90 项 / 10 组数据源 + 探测"]
+        CAT["ToolCatalog<br/>91 项 / 10 组数据源 + 探测"]
         LAUNCH["LaunchService<br/>切命令 → 启动进程 → 失败文案"]
         SETT["SettingsService + SettingsCodec<br/>kv1 落盘与钳位"]
         THS["ThemeService<br/>稳定键 → 库的 SetTheme/Apply"]
@@ -145,7 +145,7 @@ flowchart TD
 
 | 文件 | 职责 | 关键成员 | 改它之前先看 |
 |---|---|---|---|
-| `app/Services/ToolCatalog.cs` | **数据源**：90 项 / 10 组，一行一张卡 | `Groups`（键/标题/图标）、`GroupTitleOf`、`Items`、`I(...)` 建项器、`Matches`、`ProbePath`、`ProbeAvailability`、`BuildSections` | §7.1 新增入口流程、§8.5 探测口径 |
+| `app/Services/ToolCatalog.cs` | **数据源**：91 项 / 10 组，一行一张卡 | `Groups`（键/标题/图标）、`GroupTitleOf`、`Items`、`I(...)` 建项器、`Matches`、`ProbePath`、`ProbeAvailability`、`BuildSections` | §7.1 新增入口流程、§8.5 探测口径 |
 | `app/Models/ToolItem.cs` | 一张卡的数据与**标签文案** | `GroupTitle`、`CompatNote/DangerNote/DetailNote`、`PlatformChip/AdminChip/EditionChip/MissingChip/DetailTip` | §8.4 标签体系 |
 | `app/ViewModels/ToolSection.cs` | 一个分组在右栏的那块内容 + 常驻外壳 | `ItemsView`（`ListCollectionView` 过滤）、`SetQuery`、`MatchCaption`、`HasNoMatches`、`IsActive`、`ShowGroupTags`；`SectionShell.Activate` | §8.1 右栏常驻 |
 | `app/ViewModels/MainViewModel.cs` | 窗口可绑定视图：设置项 + 数据源 + 执行 | `Sections`/`Shell`、`Query`、`Execute`、`ThemeKey`、`BaseFontSize`、`ZoomPercent`、`IsSettingsOpen`、应用信息只读项 | §8.6 设置流 |
@@ -209,7 +209,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    SRC["ToolCatalog.Items<br/>90 项静态数组（写死在源码里）"]
+    SRC["ToolCatalog.Items<br/>91 项静态数组（写死在源码里）"]
     PROBE["ProbeAvailability()<br/>启动时逐条 File.Exists"]
     SEC["BuildSections()<br/>10 组 + 「全部工具」= 11 份 ToolSection"]
     VM["MainViewModel.Sections / Shell"]
@@ -454,7 +454,7 @@ flowchart TD
 
 | 数字 | 值 | 出处 / 校验方式 |
 |---|---|---|
-| 快捷入口 | **90 项 / 10 组**（左栏 11 项，含「全部工具」） | `--selftest` 的 INFO 行 + 页脚 `CatalogCaption` |
+| 快捷入口 | **91 项 / 10 组**（左栏 11 项，含「全部工具」） | `--selftest` 的 INFO 行 + 页脚 `CatalogCaption` |
 | 需管理员 / 家庭版缺 / 兼容备注 / 危险提示 | 37 / 7 / 11 / 6 | 同上 |
 | 黑名单误传命令 | 17 个 | 自测点名 |
 | 自测断言 | **126 条**（2026-10-25 实测），退出码 = 失败数 | `grep -c '^PASS' selftest.txt` |
@@ -465,7 +465,7 @@ flowchart TD
 | 切分组耗时（右栏常驻后） | 再次进入 3–25 ms；首次进入 56–102 ms；改前 181–328 ms | `doc` §7.3 |
 | 构建警告 | 固定 **9 条**（CS0414×5、CS1574×4，全来自 `lib/`） | `dotnet build --no-incremental` |
 | 产物 | `1,679,030 B`（框架依赖）/ `70,291,809 B`（自带运行时），各**只有一个 exe** | `publish*.cmd` 输出 |
-| 版本 | app `0.1.0`（→ `FileVersion 0.1.0.0`）；lib `3.0.0` | csproj + 发布守门比对 |
+| 版本 | app `1.0.0`（→ `FileVersion 1.0.0.0`）；lib `3.0.0` | csproj + 发布守门比对 |
 | `lib/` 偏离上游 | **2 个文件、4 处改动**（`UI4NavigationView.cs`、`UI4GridView.cs`），种子未回灌 | `doc` §7.1 的 `diff -rq` |
 | 设置文件 | `%APPDATA%\QuickPanel\settings.json`，kv1，9 个键 | `SettingsService` |
 
@@ -717,4 +717,6 @@ Drop（提交、落盘、提示）        Cancel（不写盘，归位动画）
 - 结构判据：`IsReorderable` 只在收藏页且无搜索时为真（自测覆盖）；卡片模板中存在带 UIA 名字「拖动排序」的标记（自测覆盖模板）。
 - 行为判据：松手后收藏页顺序 = `settings.json` 的 fav 顺序；拖动不执行工具；Esc 不写盘（按此设计，视觉与拖拽手感需人工确认）。
 - 截至本次记录（2026-10-25 18:42:35）：`--selftest` 退出码 0、**126 PASS / 0 FAIL**；本轮未跑 UIA/E2E 拖动，动画观感请以手动测试为准。
+
+
 

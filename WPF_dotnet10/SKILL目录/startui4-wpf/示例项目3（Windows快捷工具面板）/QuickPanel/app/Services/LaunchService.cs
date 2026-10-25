@@ -1,6 +1,9 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using QuickPanel.Models;
 
 namespace QuickPanel.Services
@@ -39,6 +42,89 @@ namespace QuickPanel.Services
             file = file.Substring(0, space);
         }
 
+        /// <summary>内置脚本的命令前缀：<c>script:port_killer_v3</c>。卡片上显示的就是它，收藏键也不随安装位置变。</summary>
+        public const string ScriptScheme = "script:";
+
+        /// <summary>
+        /// 把内置脚本释放到 <c>%LOCALAPPDATA%\QuickPanel\scripts\&lt;内容哈希&gt;\</c> 并返回路径。
+        /// 目录名带内容哈希：脚本升级后落到新目录，不会覆盖正在被 cmd 逐行读取的旧副本；
+        /// 资源名按后缀匹配（<c>*.&lt;名字&gt;.cmd</c>），不依赖 Link 路径推出来的命名。
+        /// </summary>
+        private static string MaterializeScript(string name, out string error)
+        {
+            error = null;
+            string bare = name == null ? string.Empty : name.Trim();
+            if (bare.Length == 0) { error = "内置脚本名为空"; return null; }
+            if (bare.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+                bare = bare.Substring(0, bare.Length - 4);
+
+            var assembly = typeof(LaunchService).Assembly;
+            string resource = null;
+            foreach (string candidate in assembly.GetManifestResourceNames())
+            {
+                if (candidate.EndsWith("." + bare + ".cmd", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(candidate, bare + ".cmd", StringComparison.OrdinalIgnoreCase))
+                {
+                    resource = candidate;
+                    break;
+                }
+            }
+            if (resource == null)
+            {
+                error = "程序集里没有内置脚本 " + bare + ".cmd";
+                return null;
+            }
+
+            byte[] bytes;
+            using (var stream = assembly.GetManifestResourceStream(resource))
+            {
+                if (stream == null) { error = "无法读取内置脚本 " + resource; return null; }
+                using (var memory = new MemoryStream())
+                {
+                    stream.CopyTo(memory);
+                    bytes = memory.ToArray();
+                }
+            }
+
+            string hash;
+            using (var sha = SHA256.Create())
+            {
+                byte[] digest = sha.ComputeHash(bytes);
+                var text = new StringBuilder(8);
+                for (int i = 0; i < 4; i++) text.Append(digest[i].ToString("x2"));
+                hash = text.ToString();
+            }
+
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "QuickPanel", "scripts", hash);
+            string target = Path.Combine(dir, bare + ".cmd");
+
+            try
+            {
+                if (!File.Exists(target))
+                {
+                    Directory.CreateDirectory(dir);
+                    try
+                    {
+                        File.WriteAllBytes(target, bytes);
+                    }
+                    catch (IOException)
+                    {
+                        // 另一个实例刚好写完：内容同哈希，谁写都是同一份
+                        if (!File.Exists(target)) throw;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                error = "释放内置脚本失败：" + ex.GetType().Name + " " + ex.Message;
+                return null;
+            }
+
+            return target;
+        }
+
         public static LaunchResult Launch(ToolItem item)
         {
             var result = new LaunchResult();
@@ -50,7 +136,22 @@ namespace QuickPanel.Services
             }
 
             string file, args;
-            Split(item.Command, out file, out args);
+            if (item.Command.StartsWith(ScriptScheme, StringComparison.OrdinalIgnoreCase))
+            {
+                string error;
+                file = MaterializeScript(item.Command.Substring(ScriptScheme.Length), out error);
+                if (file == null)
+                {
+                    result.Ok = false;
+                    result.Message = "执行「" + item.Title + "」失败：" + error;
+                    return result;
+                }
+                args = string.Empty;
+            }
+            else
+            {
+                Split(item.Command, out file, out args);
+            }
 
             try
             {
@@ -99,7 +200,9 @@ namespace QuickPanel.Services
                 reason = "系统拒绝启动这个入口。";
 
             string hint = string.Empty;
-            if (item.Probe == ToolProbe.None) hint = "若是 ms-settings 页，未知页名会静默回到设置首页。";
+            if (item.Probe == ToolProbe.None
+                && !item.Command.StartsWith(ScriptScheme, StringComparison.OrdinalIgnoreCase))
+                hint = "若是 ms-settings 页，未知页名会静默回到设置首页。";
 
             return "无法执行「" + item.Title + "」：" + reason + " " + hint
                 + "命令 " + file + "，错误 " + ex.NativeErrorCode + "：" + ex.Message;

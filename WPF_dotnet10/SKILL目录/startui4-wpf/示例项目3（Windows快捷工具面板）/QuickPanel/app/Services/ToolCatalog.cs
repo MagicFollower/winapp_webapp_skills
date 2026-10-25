@@ -6,7 +6,7 @@ using QuickPanel.ViewModels;
 namespace QuickPanel.Services
 {
     /// <summary>
-    /// 快捷入口数据源：10 个功能分组 + 1 个「全部工具」，共 90 项。
+    /// 快捷入口数据源：10 个功能分组 + 1 个「全部工具」，共 91 项。
     ///
     /// 这份表是调研结论的落地（依据见 doc/运行与构建（T0Level）.md 第 7 节的来源清单），三条硬口径：
     /// ① 只收 Win10 与 Win11 都能解析的入口，行为变化的写进 CompatNote 而不是删掉；
@@ -189,6 +189,19 @@ namespace QuickPanel.Services
             I("run", "所有用户启动项", "explorer.exe shell:Common Startup", "为全部账户添加开机自启项", admin: true, probe: "explorer.exe", probeKind: ToolProbe.WindowsFile),
             I("run", "注册表编辑器", "C:\\Windows\\regedit.exe", "查找并修改系统配置项", admin: true, danger: "改错可能损坏系统", probe: "regedit.exe", probeKind: ToolProbe.WindowsFile),
             I("run", "记事本", "notepad.exe", "快速打开并编辑纯文本文件", compat: "Win11 是带标签页的新版", probe: "notepad.exe"),
+
+            // 端口查询/结束脚本是**内置资源**（csproj 的 EmbeddedResource，随程序集进单文件 exe），
+            // 命令写 script: 前缀，由 LaunchService 释放到 %LOCALAPPDATA%\QuickPanel\scripts\<内容哈希>\ 再执行；
+            // 收藏键因此不随安装位置变，发布目录也不用带 app_script。
+            // Probe=None：探测只有 System32/Windows 两挡，内置脚本不走它们；释放失败由 LaunchService 给明确文案。
+            I("run", "端口占用查询与结束", "script:port_killer_v3",
+              "按端口查出占用进程，确认后强制结束并复验",
+              danger: "强杀进程会丢未保存数据",
+              detail: "点开后在控制台里输入端口（也可以启动时带端口参数），它会先列出占用该端口的本地连接与进程；TCP 与 UDP 都查，只匹配本地端口。\n"
+                    + "菜单里选 1 才会结束：结束前会重新查一次 PID（防 PID 复用），并强制终止整棵子进程树。\n"
+                    + "System / Registry / smss / csrss 等关键进程直接拒绝；svchost 与名字未知的进程要手输 PID 才动手。\n"
+                    + "结束完会复验端口是否真的释放；部分进程需要以管理员身份运行本程序才能结束。\n"
+                    + "脚本内置在 exe 里，首次点击时释放到 %LOCALAPPDATA%\\QuickPanel\\scripts\\（脚本内容变了会落到新目录，不覆盖正在跑的旧副本）。"),
 
             // ── 桌面图标缓存：两条力度差一档，差别写在介绍里，长解释在命令条的悬浮说明里 ──
             // 刷新那条探 ie4uinit.exe（System32，实测在）；重建那条以 cmd 起头，按"启动的文件"口径不探。

@@ -387,7 +387,7 @@ EXE QuickPanel_self_contained.exe    ICON 32x32 center=#4F6BE8  corner(1,1) a=0 
 
 发版流程（顺序不能换）：
 
-1. 改 `app\QuickPanel.csproj` 的 `<Version>`（当前 `0.1.0`）。
+1. 改 `app\QuickPanel.csproj` 的 `<Version>`（当前 `1.0.0`）。
 2. 重新打包要交付的那一档。
 3. **守门比对**：产物的 `FileVersion` 必须等于刚写的版本，否则 `publish\` 里坐的是旧构建。
 
@@ -418,7 +418,7 @@ csproj Version=0.1.0
 
 ### 7.0 这个面板的数据源是怎么来的（改命令表之前先读这一段）
 
-`app\Services\ToolCatalog.cs` 里 90 项 / 10 组不是抄一份现成命令表，是"官方文档 + 社区资料 + 本机逐条实测"交叉出来的，三条口径：
+`app\Services\ToolCatalog.cs` 里 91 项 / 10 组不是抄一份现成命令表，是"官方文档 + 社区资料 + 本机逐条实测"交叉出来的，三条口径：
 
 1. **只收 Win10 与 Win11 都能解析的入口**；行为变化的不删，写进 `CompatNote` 变成卡片上的标签（共 11 项有备注，如 `desk.cpl` 在 Win11 直启会跳「设置」、`wscui.cpl` 在 Win11 转安全中心）。
 2. **SKU 差异与权限差异分两列**：`HomeEditionMissing`（家庭版根本没这个文件，7 项：`gpedit/secpol/lusrmgr/wf/fsmgmt/certlm/rsop`）与 `RequiresAdmin`（37 项）互不混用。混成一句"启动失败"用户只能瞎试，所以失败文案里也分开说（`LaunchService.BuildFailureText`）。
@@ -522,7 +522,7 @@ Files <seed>/lib/UI4NavigationView.cs and <proj>/lib/UI4NavigationView.cs differ
 
 **排除掉的一个猜测**：以为贵在那张 `DropShadowEffect`。把 `ShadowOpacity` 设成 0 并在库里跳过挂 `Effect` 那一行（临时补丁，量完逐字节还原），全部工具仍是 188 / 181 / 213 / 175 ms —— 投影不是成本来源，元素构造与测量才是。**结论：动 `lib/` 的投影不会让这件事变快，别从这里下手。**
 
-**根因**：`UI4GridView` 的 `ItemsPanel` 是 `UniformGrid`，WPF 里它不虚拟化；而库的右栏绑的是 `SelectedItem.Content`，**Content 一换，`ContentControl` 就把整棵子树推倒重建**。数据是固定的（90 项写死在 `ToolCatalog`），重建纯属白干。
+**根因**：`UI4GridView` 的 `ItemsPanel` 是 `UniformGrid`，WPF 里它不虚拟化；而库的右栏绑的是 `SelectedItem.Content`，**Content 一换，`ContentControl` 就把整棵子树推倒重建**。数据是固定的（91 项写死在 `ToolCatalog`），重建纯属白干。
 
 **修法（不改 `lib/`，见 §7.1 的纪律：这一轮用户明确要求不动 lib）**：让所有导航项的 `Content` 指向**同一个** `SectionShell` 实例，右栏因此只模板化一次；shell 的模板是一个 `ItemsControl`（`ItemsPanel` 用 `Grid`，十节叠在同一格），每个 `ToolSection` 的根 `Grid` 绑 `Visibility ← IsActive`。切分组 = 改十个布尔，不建任何容器。首次进某一节时才建它那十几张卡（`Collapsed` 子树不参与 measure，容器生成因此天然是惰性的），之后永久留着。
 
