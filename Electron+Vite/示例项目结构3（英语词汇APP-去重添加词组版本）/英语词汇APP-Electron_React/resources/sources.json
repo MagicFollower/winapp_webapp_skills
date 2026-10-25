@@ -1,0 +1,144 @@
+{
+  "capturedAt": "2026-10-06",
+  "source": "../英文单词数据源",
+  "files": [
+    {
+      "code": "junior",
+      "name": "初中",
+      "file": "junior.json",
+      "originalName": "1-初中-顺序.json",
+      "order": 1,
+      "entries": 1990,
+      "phrases": 10016,
+      "phrasesDup": 4,
+      "phrasesUnique": 10012,
+      "withExample": 10016,
+      "uniqueInFile": 1986,
+      "bytes": 2548745,
+      "sha256_16": "bff6d2da3a864473"
+    },
+    {
+      "code": "senior",
+      "name": "高中",
+      "file": "senior.json",
+      "originalName": "2-高中-顺序.json",
+      "order": 2,
+      "entries": 3752,
+      "phrases": 30338,
+      "phrasesDup": 4967,
+      "phrasesUnique": 25371,
+      "withExample": 29535,
+      "uniqueInFile": 3742,
+      "bytes": 6996228,
+      "sha256_16": "ba7c008874877e21"
+    },
+    {
+      "code": "cet4",
+      "name": "CET4",
+      "file": "cet4.json",
+      "originalName": "3-CET4-顺序.json",
+      "order": 3,
+      "entries": 4543,
+      "phrases": 22715,
+      "phrasesDup": 1,
+      "phrasesUnique": 22714,
+      "withExample": 22715,
+      "uniqueInFile": 4543,
+      "bytes": 6091193,
+      "sha256_16": "57965c087563f3cd"
+    },
+    {
+      "code": "cet6",
+      "name": "CET6",
+      "file": "cet6.json",
+      "originalName": "4-CET6-顺序.json",
+      "order": 4,
+      "entries": 3992,
+      "phrases": 19960,
+      "phrasesDup": 0,
+      "phrasesUnique": 19960,
+      "withExample": 19960,
+      "uniqueInFile": 3991,
+      "bytes": 5645068,
+      "sha256_16": "53b55217efd0d3d4"
+    },
+    {
+      "code": "kaoyan",
+      "name": "考研",
+      "file": "kaoyan.json",
+      "originalName": "5-考研-顺序.json",
+      "order": 5,
+      "entries": 5056,
+      "phrases": 25280,
+      "phrasesDup": 0,
+      "phrasesUnique": 25280,
+      "withExample": 25280,
+      "uniqueInFile": 5046,
+      "bytes": 7512480,
+      "sha256_16": "0d68b2302df450ef"
+    },
+    {
+      "code": "toefl",
+      "name": "托福",
+      "file": "toefl.json",
+      "originalName": "6-托福-顺序.json",
+      "order": 6,
+      "entries": 10377,
+      "phrases": 53991,
+      "phrasesDup": 12,
+      "phrasesUnique": 53979,
+      "withExample": 43215,
+      "uniqueInFile": 10367,
+      "bytes": 13884433,
+      "sha256_16": "215bbaf3e69bb765"
+    },
+    {
+      "code": "sat",
+      "name": "SAT",
+      "file": "sat.json",
+      "originalName": "7-SAT-顺序.json",
+      "order": 7,
+      "entries": 4459,
+      "phrases": 28626,
+      "phrasesDup": 0,
+      "phrasesUnique": 28626,
+      "withExample": 28626,
+      "uniqueInFile": 4459,
+      "bytes": 11478742,
+      "sha256_16": "c0565eb5572a61f0"
+    }
+  ],
+  "totals": {
+    "files": 7,
+    "entries": 34169,
+    "phrases": 190926,
+    "phrasesDup": 4984,
+    "phrasesUnique": 185942,
+    "uniqueWords": 14618,
+    "wordsInMoreThanOneModule": 7808
+  },
+  "itemShape": {
+    "word": "string",
+    "translations": [
+      {
+        "translation": "string",
+        "type": "string"
+      }
+    ],
+    "phrases": [
+      {
+        "phrase": "string",
+        "usage": "string",
+        "example": "string",
+        "example_translation": "string"
+      }
+    ]
+  },
+  "notes": [
+    "本文件与 resources/*.json 都由 bin/sync-data.mjs 生成：换数据源后跑 npm run sync-data，不要手改。",
+    "种子是源文件的原样字节拷贝（不转换、不裁剪），sha256_16 用于 --check 判断是否过期。",
+    "totals.phrasesUnique 才是入库行数：导入器按 (词, 模块) 去掉重复文本，phrases − phrasesDup = phrasesUnique。",
+    "数据源没有 phonetic 字段，所以 words.phonetic 恒为 NULL。",
+    "例句内嵌在 phrases[].example / example_translation，没有独立例句表。"
+  ]
+}
