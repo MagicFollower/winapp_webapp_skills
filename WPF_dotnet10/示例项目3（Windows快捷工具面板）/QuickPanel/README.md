@@ -457,7 +457,7 @@ flowchart TD
 | 快捷入口 | **90 项 / 10 组**（左栏 11 项，含「全部工具」） | `--selftest` 的 INFO 行 + 页脚 `CatalogCaption` |
 | 需管理员 / 家庭版缺 / 兼容备注 / 危险提示 | 37 / 7 / 11 / 6 | 同上 |
 | 黑名单误传命令 | 17 个 | 自测点名 |
-| 自测断言 | **107 条**，退出码 = 失败数 | `grep -c '^PASS' selftest.txt` |
+| 自测断言 | **126 条**（2026-10-25 实测），退出码 = 失败数 | `grep -c '^PASS' selftest.txt` |
 | 主题令牌 | 38（+ 2 个别名 + 3 个排印键） | 自测段 1 |
 | 字号默认 / 区间 | 15 / 12–28 | `Typography` |
 | 缩放默认 / 区间 | 100% / 50–200 | `Typography` |
@@ -468,3 +468,253 @@ flowchart TD
 | 版本 | app `0.1.0`（→ `FileVersion 0.1.0.0`）；lib `3.0.0` | csproj + 发布守门比对 |
 | `lib/` 偏离上游 | **2 个文件、4 处改动**（`UI4NavigationView.cs`、`UI4GridView.cs`），种子未回灌 | `doc` §7.1 的 `diff -rq` |
 | 设置文件 | `%APPDATA%\QuickPanel\settings.json`，kv1，9 个键 | `SettingsService` |
+
+---
+
+## 11. 收藏方案：架构、实现与顺序落盘
+
+> 本节记录当前收藏功能（加星 / 已收藏标签 / 顶部提示 / 顺序落盘）的架构与实现；
+> 拖动排序单独记在第 12 章。
+> **记录时间：2026-10-25 18:38:07（本机时间）**。改收藏相关代码时先对照本节，尤其是 §11.4 的"顺序三条链"。
+
+### 11.1 设计边界
+
+| 决定 | 当前做法 | 原因 |
+|---|---|---|
+| 存储 | 与其它设置共用 `settings.json`（kv1），不新建文件 | 备份与迁移只有一处；现有的原子写、超限隔离、诊断日志直接复用 |
+| 键格式 | 一项一个键 `fav0`、`fav1`…，**数字后缀就是位次** | kv1 不做转义；逗号拼成一条会撞上 `rundll32.exe shell32.dll,Options_RunDLL 7` 这类自带逗号的命令 |
+| 卡片数据 | 收藏只是同一批 `ToolItem` 上的两个镜像字段，不复制卡片 | 收藏页与其它页共享引用；标签、星标、位次改一处两处同时正确 |
+| 收藏页顺序 | 独立的有序 `ObservableCollection<ToolItem>`，视图只保留搜索 Filter | 收藏顺序只存一份；视图不额外排序，避免视图与清单各自维护一套顺序 |
+| 写入时机 | 点星立即落盘 | 收藏是用户主动动作，不该等关窗；崩了不该丢 |
+
+### 11.2 四层职责
+
+| 层 | 位置 / 类型 | 职责 | 明确不做 |
+|---|---|---|---|
+| 真源 | `SettingsService.Favorites`（`List<string>`，命令原文、有序） | 收藏成员与顺序的唯一写入口 | 不碰 UI、不碰卡片对象 |
+| 持久 | `settings.json` 的 `fav<n>=<command>` | 跨进程保存；序号即顺序 | 不解释视图、不推断显示 |
+| 卡片镜像 | `ToolItem.IsFavorite` / `ToolItem.FavoriteRank` | 星标与「已收藏」胶囊读 `IsFavorite`；收藏页重建时按 `FavoriteRank` 排 | 不保存收藏清单 |
+| 收藏视图 | `ToolSection(favoriteOnly)` 的 `ObservableCollection<ToolItem>` + `ListCollectionView` | 只装收藏项、按真源顺序排列；搜索时只做 Filter | 不改真源、不直接读写文件 |
+| 交互 | `MainWindow` 的右下角星标；`MainViewModel` 的 `ToggleFavoriteCommand` | 悬浮显隐、点击、顶部提示 | 不自己维护第二份收藏清单 |
+
+`FavoriteRank = int.MaxValue` 表示未收藏。收藏项之间的位次唯一，就是它在真源列表里的下标。
+
+### 11.3 配置文件契约
+
+路径：`%APPDATA%\QuickPanel\settings.json`。主题、字号、窗口几何等 9 个固定键之外，收藏项另占 `fav0..favN-1`。
+
+```ini
+# 示意（kv1：一行一个 key=value，值原样、不转义）
+themeKey=dark
+fav0=sysdm.cpl
+fav1=appwiz.cpl
+fav2=rundll32.exe shell32.dll,Options_RunDLL 7
+```
+
+| 规则 | 行为 |
+|---|---|
+| 写侧 | `ToMap()` 按 `Favorites` 当前下标逐项写 `fav0..favN-1`；删除一项后整表重排，文件里**不留空号** |
+| 读侧 | 只认 `fav<非负整数>`；按**数字后缀**排序而不是文件行序；丢空值；`OrdinalIgnoreCase` 去重；最多 200 条 |
+| 容错 | 非法键、负数/越界序号、无法识别的行静默忽略，手改文件不影响启动 |
+| 空 map | 文件里完全没有 `fav*` 时保留内存现值（`HasFavoriteKeys` 守卫），不会把收藏清空 |
+| 上限 | `MaxFavorites = 200`；超限时"加星"返回未加入，卡片镜像不会被置为已收藏 |
+| 未知命令 | 设置里仍保留原文；收藏页只显示目录里真实存在的卡片（`SyncFavorites` 只给目录项打位次） |
+| 命令去重 | 大小写不敏感；手改文件出现重复命令时保留序号最小的一条 |
+
+**读取一次的顺序链**（应用启动）：
+
+```text
+settings.json
+  └─ SettingsService.Load / ApplyMap
+       └─ ReadFavorites：按 fav 后缀排序、去重、丢空、截断
+            └─ ToolCatalog.SyncFavorites：给每个目录项写 IsFavorite 与 FavoriteRank
+                 └─ ToolSection.NotifyFavoritesChanged：按 FavoriteRank 重建 _favoriteItems
+                      └─ 收藏页按 _favoriteItems 的顺序显示卡片
+```
+
+**写出一条的顺序链**（点星）：
+
+```text
+真源 Favorites 的当前下标
+  └─ ToMap：fav0..favN-1
+       └─ Save 原子写 settings.json
+```
+
+### 11.4 顺序的唯一事实链
+
+用户能看到的顺序，本质只有一条链，三处必须始终相同：
+
+1. **收藏页卡片的显示顺序** = `_favoriteItems` 的枚举顺序；
+2. **真源顺序** = `SettingsService.Favorites` 的下标；
+3. **文件顺序** = `settings.json` 中 `fav<数字后缀>` 的数值顺序。
+
+各操作对这条链的影响：
+
+| 操作 | 对真源 | 对文件 | 对收藏视图 |
+|---|---|---|---|
+| 加星 | `Favorites.Add(command)`，落到**末尾** | 紧接着的 `Save()` 写出 `fav<Count-1>` | 重建集合，新项排最后 |
+| 取消星 | `RemoveAt(index)`，后面的项整体前移 | 紧接着的 `Save()` 重写 `fav0..N-1`，无空号 | 重建集合，去掉该项 |
+| 手改文件 | 不改内存 | 用户直接编辑 | 下次启动按数字后缀还原 |
+
+新增与取消是"成员变化"，收藏视图重建一次即可；保持顺序不变的增删不会让其它节的卡片顺序变化。拖动排序只改下标，其手势、动画与落盘时序见 §12.6。
+
+### 11.5 添加 / 移除的完整通路
+
+1. 鼠标悬浮卡片 → 容器的 `IsMouseOver` 触发右下角星标显形；空心星 `E734`（添加）与实心星 `E735`（移除）互斥显示，都带 UIA 名字。
+2. 点星走 `ToggleFavoriteCommand`；按钮会吃掉左键，**不会**连带执行卡片。
+3. `MainViewModel.ToggleFavorite(item)` → `SettingsService.ToggleFavorite(command)`：改真源，返回"切换后是否在收藏中"。
+4. `SyncFavoriteViews()`：`ToolCatalog.SyncFavorites(Favorites)` 重写所有卡片的 `IsFavorite` / `FavoriteRank`；收藏节 `NotifyFavoritesChanged()` 按新位次重建 `_favoriteItems`。
+5. `Save()` 立即落盘；顶部提示条给出「已添加至收藏 / 已从收藏移除」，同时写入页脚留痕，3 秒后自动收起。
+6. 非收藏节不参与重建：`NotifyFavoritesChanged` 对它们本来就是空操作。
+
+### 11.6 关键判据与当前实测
+
+| 判据 | 覆盖点 |
+|---|---|
+| 文件契约 | `fav0` 起连续编号；往返保持顺序与内容；手改表按序号回正、去重、丢空、截断；null/空 map 不清收藏 |
+| 真源语义 | `ToggleFavorite` 返回切换后状态；收藏清单往返与手改容错 |
+| 收藏节视图 | 只放已收藏项；搜索叠加时分母按收藏数算；位次排序；空态文案 |
+| 交互入口 | 两颗星互斥且都有 UIA 名字；点星不触发卡片执行 |
+
+**截至本节记录时间（2026-10-25 18:38:07）的实测**：`QuickPanel.exe --selftest` 退出码 **0**，报告 **126 PASS / 0 FAIL**（报告写在 `%APPDATA%\QuickPanel\selftest.txt`）。
+
+---
+
+## 12. 收藏拖动排序：需求分析与实现方案
+
+> **记录时间：2026-10-25 18:42:35（本机时间）**
+> 本节只谈拖动排序；收藏的存储契约、增删通路与"顺序三条链"见第 11 章。
+
+### 12.1 需求分析
+
+| 编号 | 需求 | 可验收的状态 |
+|---|---|---|
+| R1 | 只在收藏页提供排序手柄 | 收藏页卡片右上角有「拖动排序」标记；其它分组不显示 |
+| R2 | 搜索态不提供排序 | 搜索框非空时手柄隐藏，网格拒绝开拖 |
+| R3 | 按住手柄可拖动，卡片跟手 | 指针移动时被拖卡片贴着指针走，原位置空出 |
+| R4 | 其余卡片要有让位动画 | 跨越位次时，受影响的卡片用位移动画滑到新槽位，不瞬移 |
+| R5 | 可落在列表的任意位置 | 首格之前、末格之后、行间空隙、滚动后的位置都能落 |
+| R6 | 松手才提交 | 拖动中真源与文件不变；松手才改顺序并落盘 |
+| R7 | 取消不产生副作用 | Esc / 捕获被系统抢走时回到原顺序，不写盘、不弹提示 |
+| R8 | 拖动不能误执行工具 | 按住或点击手柄都不触发卡片执行 |
+| R9 | 不破坏既有交互与库约束 | 悬浮星标、HoverScale、悬停标签照旧；不改 `lib/` |
+
+验收主判据：松手后 `settings.json` 的 fav 键顺序 = 收藏页显示顺序 = 真源下标（§11.4）。
+
+### 12.2 约束与难点
+
+| 约束 | 对实现的影响 |
+|---|---|
+| `lib/UI4GridView` 在容器（`ListBoxItem`）的 `RenderTransform` 上跑 HoverScale | 位移不能挂容器，必须挂模板内的 `PART_ItemRoot` |
+| 收藏视图带 `SortDescription` 时 `ListCollectionView` 会忽略底层 Move | 拖动提交若要 Move，收藏视图必须去掉排序（第 11 章已改） |
+| `Refresh()` 是 Reset，会重建卡片容器 | 松手不能 Refresh，否则 FLIP 断帧、页面跳动 |
+| 搜索态下视图只是子集 | 拖动必须在搜索为空时禁用，否则"落到第几格"映射不回完整清单 |
+| UniformGrid 不虚拟化、卡片高度由内容决定 | 落点不能靠固定步长算，必须从布局系统读真实槽位 |
+| 列表可能超出一屏 | 需要在边缘自动滚动，否则"任意位置"不成立 |
+
+### 12.3 方案选型
+
+| 方案 | 结论 | 理由 |
+|---|---|---|
+| `DragDrop.DoDragDrop` | 不用 | 系统拖影 + drop 握手无法逐帧控制"其余卡片让位"，落点仍要自算 |
+| 子元素 MouseDown/Move + 子元素捕获 | 不用 | 命中层或模板内容一变手势就丢；空隙处 `InputHitTest` 找不到卡 |
+| 网格 Preview 事件 + 网格自身捕获 | **采用** | 输入从源头可见，不受子元素处理影响；落点用几何而非命中 |
+| 拖动中实时改真源（跨一格 Refresh 一次） | 不用 | Reset 重建容器、动画断帧；中途取消还要回滚 |
+| 拖动中只做视觉预览，松手提交一次 | **采用** | 真源只有一次写入；取消零成本；动画连续 |
+| 落点用"压在哪张卡上" | 不用 | 首格前/末格后/空隙没有卡，手势会失效 |
+| 落点用"最近槽位中心" | **采用** | 任意位置都有最近槽位；槽位来自 `LayoutInformation.GetLayoutSlot` |
+| `SortDescription + Refresh` 提交 | 不用 | 排序视图忽略 Move；Refresh 会跳 |
+| `ObservableCollection.Move` 提交 | **采用** | 发 Move 事件，容器原地挪，不 Reset |
+
+### 12.4 交互状态机
+
+```text
+Idle
+  │ 按下在标记矩形内（收藏页、搜索为空）
+  ▼
+Armed（已捕获鼠标，还没抬卡）
+  │ 指针移动 > 3px
+  ▼
+Dragging（卡片跟手、其余卡片让位预览、自动滚动生效）
+  │ 松手                        │ Esc / LostMouseCapture
+  ▼                             ▼
+Drop（提交、落盘、提示）        Cancel（不写盘，归位动画）
+  │                             │
+  └──────── 收尾动画结束 ───────┘
+                 ▼
+               Idle
+```
+
+- 只在标记上点一下（没有超过 3px）→ 直接回 Idle，不排序、不写盘、不执行卡片。
+- 状态由 `_dragItem` 与 `_dragLifted` 两个字段判定；`_dragLifted` 之前不显示跟手位移。
+
+### 12.5 关键实现
+
+#### 12.5.1 手势入口
+
+- 事件：`UI4GridView.PreviewMouseLeftButtonDown / PreviewMouseMove / PreviewMouseLeftButtonUp / LostMouseCapture`。
+- 开拖：从 `e.OriginalSource` 找到 `ListBoxItem`，再按 `Tag="FavoriteGrip"` 找到标记；用 `TranslatePoint` 把标记矩形换算到网格坐标，指针落在矩形 **±4px** 内才开拖。这样即使命中的是卡片内容，手柄区域仍然有效。
+- 前置条件：`ToolSection.IsReorderable`（收藏节且搜索为空）。
+- 捕获：`host.CaptureMouse()`；失败就按普通按下处理，避免变成"执行卡片"。
+
+#### 12.5.2 跟手
+
+- 模板根 `PART_ItemRoot` 上放 `TranslateTransform`；按下时记录 `pointer - 渲染位置` 作为抓取偏移。
+- 每次移动：`translation = pointer - grabOffset - 当前槽位左上角`。槽位随自动滚动变化，因此每帧重算，视觉上钉在指针下。
+- 容器 `ZIndex=500` 抬到最上层，`Mouse.OverrideCursor = SizeAll`；结束时恢复。
+
+#### 12.5.3 落点与挤位预览
+
+- 槽位：`LayoutInformation.GetLayoutSlot(container)` 给出容器在面板内的布局槽，加上面板到网格的偏移，得到网格坐标系下的真实槽位（含滚动）。
+- 落点：对每个槽位算中心到指针的平方距离，取最小；指针先夹到网格边界内。首格前/末格后/行间空隙都会落到最近的槽位。
+- 预览顺序：
+  - `insert < origin`：原下标 `[insert, origin)` 的卡片右移一格（预览下标 +1）；
+  - `insert > origin`：原下标 `(origin, insert]` 的卡片左移一格（预览下标 -1）；
+  - 其余不动；被拖卡片不参与位移。
+- 动画：受影响卡片从当前槽位到目标槽位的差值用 150ms `CubicEase(EaseOut)` 位移；位次连续变化时新动画从当前值接管。
+
+#### 12.5.4 自动滚动
+
+- 指针在滚动视口上/下边缘 42px 内时，每 45ms 滚动 26px（夹在 `[0, Extent - Viewport]`）。
+- 每次滚动后 `UpdateLayout()`，并用最后的指针位置重算槽位与落点——拖到屏幕外的位置也能落。
+
+#### 12.5.5 松手提交与 FLIP 收尾
+
+1. 记录每张卡当前**渲染位置**（含正在跑的位移动画）作为 FLIP 起点。
+2. `SettingsService.MoveFavoriteToIndex(dragged, newIndex)`：从真源摘出再插入；越界夹紧；最终位次没变返回 `false`。
+3. `ToolCatalog.SyncFavorites(Favorites)` 更新 `FavoriteRank`（`IsFavorite` 不变，不触发标签重建）。
+4. 收藏节 `MoveFavoriteItem(oldIndex, newIndex)` → `ObservableCollection.Move` → `ListCollectionView` 以 Move 事件透传 → ListBox 移动容器，**不 Refresh / 不 Reset**。
+5. `Save()` + 顶部提示「已调整收藏顺序：「标题」放到第 N 位」。
+6. 清拖动态：**先把 `_dragItem` 置空，再释放鼠标捕获**，否则 `ReleaseMouseCapture()` 同步触发的 `LostMouseCapture` 会把这次松手当成取消。
+7. `UpdateLayout()` 后，对每张卡：`translation = FLIP 起点 - 最终布局位置`，再从该值动画到 0（180ms）。被拖卡片从指针处滑入新格，其余卡片从预览位置归位。
+
+#### 12.5.6 取消
+
+- `Esc` 或捕获被系统抢走：快照当前渲染位置 → 不提交 → 归位动画；真源与文件一个字都没改。
+- 松手时位次没变：不写盘、不弹提示，只做归位动画。
+
+### 12.6 顺序与配置文件的关系（拖动视角）
+
+- 拖动**只改变下标**，不改变收藏成员；松手后 `ToMap()` 按新下标重写 `fav0..favN-1`，文件里没有空号。
+- 拖动过程中显示的"让位"只是 `PART_ItemRoot` 的位移，真源、`FavoriteRank` 和 `settings.json` 都不动；因此 Esc / 丢捕获可以无成本取消。
+- 重启后按第 11 章的读取链还原：`fav` 后缀排序 → `FavoriteRank` → `_favoriteItems`，得到与松手时相同的顺序。
+
+### 12.7 边界与异常
+
+| 场景 | 行为 |
+|---|---|
+| 收藏为空 / 只有一张 | 0 张时没有卡片；1 张时手柄显示，但拖动不会产生顺序变化 |
+| 搜索框非空 | 手柄隐藏，网格按 `IsReorderable=false` 直接拒绝开拖 |
+| 普通点击手柄 | 不进入 Dragging，不排序、不写盘、不执行卡片 |
+| 拖到列表外 | 指针先夹到网格边界，落点仍是最近的槽位 |
+| 长列表 | 边缘自动滚动；槽位随滚动重算 |
+| Alt+Tab / UAC 抢走捕获 | `LostMouseCapture` 归位并清状态，不提交 |
+| 松手前位次没变 | 归位动画，不写盘、不提示 |
+| 视图未跟上 Move（异常） | `CommitFavoriteReorder` 退回一次全量重建，至少保证界面与真源一致 |
+
+### 12.8 判据与实测
+
+- 结构判据：`IsReorderable` 只在收藏页且无搜索时为真（自测覆盖）；卡片模板中存在带 UIA 名字「拖动排序」的标记（自测覆盖模板）。
+- 行为判据：松手后收藏页顺序 = `settings.json` 的 fav 顺序；拖动不执行工具；Esc 不写盘（按此设计，视觉与拖拽手感需人工确认）。
+- 截至本次记录（2026-10-25 18:42:35）：`--selftest` 退出码 0、**126 PASS / 0 FAIL**；本轮未跑 UIA/E2E 拖动，动画观感请以手动测试为准。
+
