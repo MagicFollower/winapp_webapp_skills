@@ -4,6 +4,10 @@
 直接运行
   dotnet run --project .\__APPNAME__.csproj
 
+一键构建并启动界面（项目根目录；比 dotnet run 少占终端）
+  ..\run.cmd            → dotnet build + 启动 app\bin\Debug\net10.0-windows\__APPNAME__.exe
+  ..\run.cmd selftest   → 构建 + 跑 --selftest，退出码与报告直接打在控制台
+
 一键打包单 exe（上级目录两个脚本，产物文件名带模式后缀）
   publish.cmd            → ..\publish\__APPNAME___self_contained.exe  约 60+ MB，运行时在包里，目标机免装 .NET
   publish_no_runtime.cmd → ..\publish_no_runtime\__APPNAME___no_runtime.exe  约 2-3 MB，

@@ -198,7 +198,8 @@ foreach ($p in @($appCsproj, (Join-Path $appDir 'App.xaml'), (Join-Path $appDir 
                  (Join-Path $appDir 'Views\SettingsOverlay.xaml'), (Join-Path $appDir 'Views\SettingsOverlay.xaml.cs'),
                  (Join-Path $libDir 'StartUI4Controls.csproj'),
                  (Join-Path $libDir 'LICENSE.txt'), (Join-Path $Path 'publish.cmd'),
-                 (Join-Path $Path 'publish_no_runtime.cmd'), (Join-Path $appDir 'AppIcon.ico'),
+                 (Join-Path $Path 'publish_no_runtime.cmd'), (Join-Path $Path 'run.cmd'),
+                 (Join-Path $appDir 'AppIcon.ico'),
                  (Join-Path $Path 'doc\运行与构建（T0Level）.md'))) {
     if (-not (Test-Path -LiteralPath $p)) { Fail "产物缺 $p" 6 }
 }
@@ -220,6 +221,7 @@ Write-Output ("     lib/   {0} 个文件（StartUI4Controls v3.0.0 源码自包�
 Write-Output "     属性名/默认值/枚举/事件查 lib/README.md；主题实测数据查 lib/架构审计报告-3.0.0主题机制评审.md"
 Write-Output ("     app/   占位符替换 {0} 个文件；RootNamespace/AssemblyName = {1}；AppIcon.ico {2} 字节（字母「{3}」像素图标，7 档尺寸）" -f $touched, $Name, $icoSize, $Name.Substring(0,1).ToUpperInvariant())
 Write-Output "     下一步：dotnet build `"$appCsproj`""
+Write-Output "     快速启动：根目录 run.cmd = 构建最新源码 + 起 Debug exe；run.cmd selftest = 构建后跑自测并打印报告"
 Write-Output "     跑起来验收：右上角齿轮 → 设置浮层，里面「配色」四挡逐个点都要改观感（含原生标题栏），"
 Write-Output "     页脚那行的生效键要从 light 变到 dark / paper-grey；「正文字号」滑杆要带动整窗（含胶囊与圆钮尺寸），"
 Write-Output "     「全局缩放」在 150%/200% 下不裁切、窗口拖不到比折算下限更小。只有局部在变 = 那处写了字面值。"

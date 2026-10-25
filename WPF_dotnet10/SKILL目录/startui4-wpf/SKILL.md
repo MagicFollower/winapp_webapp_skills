@@ -19,6 +19,7 @@ StartUI4Controls 是**零 XAML** 的 WPF 组件库：39 个 `UI4*` 控件的模�
 ## 何时使用
 
 - 新建 .NET 10 WPF 桌面应用，要用这套组件（含"照示例项目结构再来一个"）。
+- 想从最新源码一条命令起界面：用工程根目录的 `run.cmd`（默认构建 + 启动 Debug exe；`run.cmd selftest` 构建后跑自测）。
 - 已有工程里要写/改 `UI4*` 控件的 XAML 或 C#，需要准确的属性名、枚举、事件签名。
 - 已有工程里**修缺陷或做优化**：走「优化与 bug 处理：三步执行流程」（5.1–5.3），三步不可乱序；改 `lib/` 组件源码前必须先征求用户同意；**不主动写测试、不主动跑挡位**（`dotnet build` 0 错误是默认唯一门禁，用户点名才跑那一挡）；处理完立刻把"问题 + 核心修复方案概要"追加进当日 `doc/YYYY-MM-DD优化与Bug修复清单.md`，不等验收确认。
 - 切主题后部分界面没变、`{DynamicResource UI4.Brush.X}` 拿到空、套装键 `Apply` 无反应。
@@ -54,8 +55,9 @@ StartUI4Controls 是**零 XAML** 的 WPF 组件库：39 个 `UI4*` 控件的模�
 │   ├── ViewModels/MainViewModel.cs    设置项的可绑定视图（真源仍是 SettingsService）
 │   ├── Views/SettingsOverlay.xaml     设置浮层内容（应用信息 / 配色 / 字体 / 全局缩放）
 │   ├── Converters/Converters.cs       BoolToVis（浮层显隐）+ ZoomedSize（缩放下的窗口下限）
-│   └── 快速启动.txt                    build / run / 两档 publish / selftest 四条命令带判据
+│   └── 快速启动.txt                    build / run.cmd / 两档 publish / selftest 命令带判据
 ├── lib/                      组件源码整份自包含（44 个 .cs + csproj + AssemblyInfo + LICENSE.txt + README.md 组件手册 + 架构审计报告）
+├── run.cmd                   一键构建最新源码 + 启动 Debug exe（run.cmd selftest 跑自测）
 ├── publish.cmd               单文件 + 自带运行时
 └── publish_no_runtime.cmd    单文件 + 框架依赖
 ```
@@ -155,6 +157,8 @@ dotnet build "<proj>/app/<AppName>.csproj"
 ```
 
 **9 条警告是 lib 自带的**（`CS0414` 未使用字段 ×5、`CS1574` XML 注释 cref 解析不到 ×4），`0 个错误`就是过。别去"修"它们——改 `lib/` 要同时重钉种子清单，否则 `fetch-source.ps1` 的 sha 校验会红（见"源码来源与升级"）。
+
+**快速启动回路（可选）**：新建工程根目录自带 `run.cmd`（与 README 同级）——默认执行 `dotnet build app\<App>.csproj` 后 `start` 启动 `app\bin\Debug\net10.0-windows\<App>.exe`，随后返回；`run.cmd selftest` 构建后跑 `--selftest` 并打印退出码与报告。脚本不杀已有实例，构建被文件占用时先关窗口。它只是便捷回路，不是门禁：门禁仍是 `dotnet build` 0 错误（或用户点名的那一挡）。
 
 手工加控件文件时注意：`Copy-Item -LiteralPath <目录> -Destination <已存在的目录> -Recurse` 会套出一层同名子目录，逐文件按相对路径拷才对。
 
@@ -481,7 +485,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 
 删：`app\bin\`、`app\obj\`、`lib\bin\`、`lib\obj\`（`dotnet build` 能重建的中间物）、`publish\` 与 `publish_no_runtime\` 里非本轮的 exe、验收产生的 `*.log` / 截图 / 临时分发目录、Skill 侧的 `assets\seed\.fetch-tmp\`。
 
-留：`app\`、`lib\`（源码与 `LICENSE.txt`、`README.md`、审计报告都是源，不是中间物）、`doc\`（T0Level 文档，有过优化/修复时还有当日的 `YYYY-MM-DD优化与Bug修复清单.md`，都是交付源）、根上的 `publish.cmd` / `publish_no_runtime.cmd`、`快速启动.txt`。
+留：`app\`、`lib\`（源码与 `LICENSE.txt`、`README.md`、审计报告都是源，不是中间物）、`doc\`（T0Level 文档，有过优化/修复时还有当日的 `YYYY-MM-DD优化与Bug修复清单.md`，都是交付源）、根上的 `run.cmd` / `publish.cmd` / `publish_no_runtime.cmd`、`快速启动.txt`。
 
 两条判据：
 
@@ -580,7 +584,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 
 ## Step 10 — 验收清单
 
-窄改动只跑覆盖该面的那一挡；新建工程、改主题通路或改排印通路要跑到第 12 条。UIA 挡证不住颜色与字号，这些结论用截图或 `--selftest` 的 `INFO` 行。
+窄改动只跑覆盖该面的那一挡；新建工程、改主题通路或改排印通路要跑到第 12 条，新建工程另跑第 14 条（`run.cmd` 快速启动回路）。UIA 挡证不住颜色与字号，这些结论用截图或 `--selftest` 的 `INFO` 行。
 
 **改 bug / 做优化不主动跑本清单**：那条路走「优化与 bug 处理：三步执行流程」，默认只有 `dotnet build` → `0 个错误` 一道门禁，用户点名哪一挡才跑哪一挡。本清单用于新建工程、改主题/排印通路、以及整轮交付前。
 
@@ -597,6 +601,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 11. 间距：Step 3 的静态扫描**输出为空**（`Margin/Padding` 全在 4 的倍数上），截图上相邻控件看得见留白、卡片投影四边完整、鼠标扫过卡片有放大反馈（没反馈＝`ItemMargin` 贴边，见故障速查）。
 12. 设置面板（做了第 4 挡才要跑）：齿轮开得起来，完成 / 遮罩 / Esc 三种关法都关得掉；四节齐全且**改了就立即生效**（配色整窗连标题栏、字号带动层级与圆钮尺寸、缩放不裁切）；关掉面板后 `%APPDATA%\<App>\settings.json` 里看得见的值就是刚选的那套，重启仍是它；把字号拉到 28、缩放拉到 200% 看一遍截断与窗口下限，再回到默认。判据：`FontSize="[0-9]` 静态扫描为空 + 排印段全绿，其余目测（Step 4.5 末）。
 13. 种子没被改动过：`fetch-source.ps1` 打 `LOCAL 48/48 种子完整，未联网`，且 `git status` 里 `assets/seed/lib` 干净。改过 `lib/` 就要走"源码来源与升级"的第 2 步重钉清单，否则下一个工程会被 sha 校验挡在退 5。
+14. 新建工程根目录的 `run.cmd` 能构建并启动最新 Debug exe；`run.cmd selftest` 退出码 0。它只是便捷回路，不替代第 1–2 条门禁。
 
 ## 实测基准（单机口径，换机器请重测）
 
@@ -658,7 +663,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 - `示例项目3（Windows快捷工具面板）/QuickPanel` — 随 Skill 附带的完整参考实现，也是「实战场景：卡片网格拖动排序（组件内通用方案）」的首个落地实例；该场景在 `README.md` §11–§12、`app/MainWindow.xaml`（手柄标记 + Preview 事件）、`app/MainWindow.xaml.cs`（拖动管线与 FLIP）、`ViewModels/ToolSection.cs`（有序集合 + `MoveFavoriteItem`）、`ViewModels/MainViewModel.cs`（`CommitFavoriteReorder`）、`Services/SettingsService.cs`（`MoveFavoriteToIndex`）。
 - `assets/seed/lib/` — 组件源码整份自包含，**48 个文件** = 44 个 `.cs`（含 `Internal/` 6 个）+ `StartUI4Controls.csproj` + `LICENSE.txt` + `README.md`（组件手册，随工程进 `lib/`）+ `架构审计报告-3.0.0主题机制评审.md`（主题通路的实测数据）。**自 2026-10-04 起它是自持基线**：源自仓库内三个示例工程 `lib/` 的并集，比清单 `fetchedFrom` 那份上游目录（commit `5d96442a` 的 `componentSourceCode/StartUI4Controls`，main 上已删）多 14 个文件的有意改动。文件按 LF 存。改它必须同步三个示例工程 + 重钉清单 + 回灌 `references/`（见"源码来源与升级"）。
 - `assets/seed/manifest.json` — 上述 48 条 `path + blobSha + size` 与内容计数基线（`.cs` 44 / 令牌 38 / **DP 238**），回源与校验都以它为准；`upstream.baseline` 段记着自持基线的来源、偏离清单（14 个文件）与放行条件。
-- `assets/templates/app/`、`assets/templates/root/` — 工程模板，`__APPNAME__` 为占位符（`.md` 也参与替换）。配色侧：`Helpers/Theme.cs`（单源 + **必须显式决策的 `Policy`**）。设置侧（Step 4.5）：`Helpers/Typography.cs`、`Services/SettingsService.cs` + `SettingsCodec.cs`、`Services/ThemeService.cs`、`ViewModels/MainViewModel.cs`、`Views/SettingsOverlay.xaml(.cs)`、`Converters/Converters.cs`、`MainWindow.xaml` 的齿轮 + 遮罩 + `LayoutTransform` + Esc。门禁侧：`Services/SelfTest.cs`（三段、实测 67 条）。app csproj（`<Version>0.1.0</Version>` 是 FileVersion 守门的基准）、`root/doc/运行与构建（T0Level）.md`（Step 8 的八节骨架，随 scaffold 落进工程，待填位用中文方括号标记）。
+- `assets/templates/app/`、`assets/templates/root/` — 工程模板，`__APPNAME__` 为占位符（`.md` 也参与替换）。`root/run.cmd` 是根目录的一键启动脚本（`run.cmd selftest` 跑自测）。配色侧：`Helpers/Theme.cs`（单源 + **必须显式决策的 `Policy`**）。设置侧（Step 4.5）：`Helpers/Typography.cs`、`Services/SettingsService.cs` + `SettingsCodec.cs`、`Services/ThemeService.cs`、`ViewModels/MainViewModel.cs`、`Views/SettingsOverlay.xaml(.cs)`、`Converters/Converters.cs`、`MainWindow.xaml` 的齿轮 + 遮罩 + `LayoutTransform` + Esc。门禁侧：`Services/SelfTest.cs`（三段、实测 67 条）。app csproj（`<Version>0.1.0</Version>` 是 FileVersion 守门的基准）、`root/doc/运行与构建（T0Level）.md`（Step 8 的八节骨架，随 scaffold 落进工程，待填位用中文方括号标记）。
 - `scripts/scaffold.ps1` — Step 1 的生成器（已实测：空种子 → 自动回源 → 生成 → `dotnet build` 0 错误 9 条 lib 警告 → `--selftest` 退 0 共 67 条 PASS；种子完整时加 `-Offline` 零联网。产物点名清单含设置底座那 8 个文件，缺一项退 6）。
 - `scripts/make-icon.ps1` — 应用图标生成器（Step 7）。`-Name` 取首字母、`-Glyph` 显式指定，`-Back`/`-Fore` 换色，`-Sizes` 换尺寸集；输出 16/24/32/48/64/128/256 七帧 32bpp ICO（<256 走 DIB + AND 掩码，256 走内嵌 PNG），写完自己回读目录与 16/32 两档像素做自证。已实测：脚手架产出的工程 `dotnet build` 后 `ExtractAssociatedIcon` 取回 32×32，圆角 `alpha=0`、字形与底色取色命中。
 - `scripts/fetch-source.ps1` — 种子的取源器（三挡 + 四条通路 + blob sha 校验，已实测 A 通路 629,603 B 取齐 48 个文件、第二次跑命中本地不发请求）。`-Refresh` 默认被自持基线闸门挡下（退 2），`-AllowUpstreamReset` 才放行。
