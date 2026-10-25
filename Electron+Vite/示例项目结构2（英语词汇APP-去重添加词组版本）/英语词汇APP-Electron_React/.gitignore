@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-electron/
+release/
+*.log
+*-out.txt
+*-err.txt
+_probe/
+.dbreport/
+.selftest-shots/
+.selftest-userdata/
+.share-probe/
+.themes-cache/

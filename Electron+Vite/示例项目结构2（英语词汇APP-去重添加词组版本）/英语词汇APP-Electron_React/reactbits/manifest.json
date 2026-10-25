@@ -1,0 +1,40 @@
+{
+  "source": {
+    "repo": "DavidHDev/react-bits",
+    "ref": "main",
+    "variant": "src/ts-default",
+    "attribution": "组件源码按 ReactBits 的 copy-in 用法逐文件取回，原文存 reactbits/raw/ 不改写；取用日期 2026-10-05。许可条款见 reactbits/LICENSE-source.txt（取回时记录的仓库版权声明）。",
+    "hosts": [
+      "https://raw.githubusercontent.com/DavidHDev/react-bits/main/",
+      "https://cdn.jsdelivr.net/gh/DavidHDev/react-bits@main/",
+      "https://fastly.jsdelivr.net/gh/DavidHDev/react-bits@main/"
+    ]
+  },
+  "capturedAt": "2026-10-05",
+  "targetDir": "src/components/ui",
+  "transforms": [
+    "CRLF -> LF",
+    "剥掉 .tsx 首行的 'use client';",
+    ".tsx 首行加 // @ts-nocheck（vendored 源码不并入本工程 strict lint 口径，接口仍类型化）",
+    "CSS：把非自定义属性的 var(X) 展开回 X（上游 Waves.css 有 calc(var(-0.5rem) - 50%) 这类写法，lightningcss 解析失败）",
+    "结尾补一个换行"
+  ],
+  "components": [
+    { "name": "Dock", "category": "Components", "files": ["Dock.tsx", "Dock.css"] },
+    { "name": "SpotlightCard", "category": "Components", "files": ["SpotlightCard.tsx", "SpotlightCard.css"] },
+    { "name": "AnimatedList", "category": "Components", "files": ["AnimatedList.tsx", "AnimatedList.css"] },
+    { "name": "Carousel", "category": "Components", "files": ["Carousel.tsx", "Carousel.css"] },
+    { "name": "TiltedCard", "category": "Components", "files": ["TiltedCard.tsx", "TiltedCard.css"] },
+    { "name": "BlurText", "category": "TextAnimations", "files": ["BlurText.tsx"] },
+    { "name": "CountUp", "category": "TextAnimations", "files": ["CountUp.tsx"] },
+    { "name": "SplitText", "category": "TextAnimations", "files": ["SplitText.tsx"] },
+    { "name": "GradientText", "category": "TextAnimations", "files": ["GradientText.tsx", "GradientText.css"] },
+    { "name": "ShinyText", "category": "TextAnimations", "files": ["ShinyText.tsx", "ShinyText.css"] },
+    { "name": "FlipCard", "category": "Micro", "files": ["FlipCard.tsx", "FlipCard.css"] },
+    { "name": "FuseButton", "category": "Micro", "files": ["FuseButton.tsx", "FuseButton.css"] },
+    { "name": "HoldButton", "category": "Micro", "files": ["HoldButton.tsx", "HoldButton.css"] },
+    { "name": "Aurora", "category": "Backgrounds", "files": ["Aurora.tsx", "Aurora.css"] },
+    { "name": "Waves", "category": "Backgrounds", "files": ["Waves.tsx", "Waves.css"] },
+    { "name": "DotGrid", "category": "Backgrounds", "files": ["DotGrid.tsx", "DotGrid.css"] }
+  ]
+}
