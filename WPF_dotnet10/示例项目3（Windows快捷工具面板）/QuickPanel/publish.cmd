@@ -5,7 +5,15 @@ cd /d "%~dp0app"
 set "OUT=%~dp0publish"
 set "EXE=%OUT%\QuickPanel_self_contained.exe"
 
+set "VER="
+for /f "usebackq delims=" %%V in (`dotnet msbuild QuickPanel.csproj -getProperty:Version -nologo`) do if not defined VER set "VER=%%V"
+if not defined VER (
+  echo [publish] could not read Version from QuickPanel.csproj
+  goto :fail
+)
+
 echo [1/3] publish single-file, SELF-CONTAINED (runtime bundled), win-x64
+echo       code version: v!VER!
 echo       target machine needs no .NET installed
 echo       first run downloads the .NET WindowsDesktop runtime pack (about 150 MB) from nuget.org
 echo       DebugType=embedded / GenerateDocumentationFile=false are global properties: they reach the
@@ -24,7 +32,19 @@ echo selftest exit code: !ST!
 
 echo.
 echo [3/3] artifact
-for %%F in ("%EXE%") do echo   %%~fF   %%~zF bytes
+set "STAMP="
+for /f "usebackq delims=" %%T in (`powershell -NoProfile -Command "Get-Date -Format yyyyMMddHHmmss"`) do if not defined STAMP set "STAMP=%%T"
+if not defined STAMP (
+  echo [publish] could not create build timestamp
+  goto :fail
+)
+set "ART=%OUT%\QuickPanel_v!VER!_self_contained_build_!STAMP!.exe"
+move /y "%EXE%" "%ART%" >nul
+if errorlevel 1 (
+  echo [publish] failed to rename "%EXE%" to "%ART%"
+  goto :fail
+)
+for %%F in ("%ART%") do echo   %%~fF   %%~zF bytes
 echo   files in publish\:
 dir /b "%OUT%"
 

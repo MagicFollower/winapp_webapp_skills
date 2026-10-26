@@ -79,8 +79,8 @@ QuickPanel/
 │   └── Internal/         6 个内部件（ColorToBrushConverter 等）
 ├── publish.cmd                   单文件 + 自带运行时
 ├── publish_no_runtime.cmd        单文件 + 框架依赖
-├── publish/                      产物（只一个 exe）
-└── publish_no_runtime/           产物（只一个 exe）
+├── publish/                      本次产物（QuickPanel_v<Version>_self_contained_build_<yyyyMMddHHmmss>.exe）
+└── publish_no_runtime/           本次产物（QuickPanel_v<Version>_no_runtime_build_<yyyyMMddHHmmss>.exe）
 ```
 
 不该进版本控制的：`app/bin`、`app/obj`、`lib/bin`、`lib/obj`、两个 `publish*` 目录、`%APPDATA%\QuickPanel\`。
@@ -339,10 +339,12 @@ flowchart TD
     G1 -->|否| STOP["停：看 %APPDATA%\\QuickPanel\\selftest.txt"]
     G1 -->|是| G2{"产物 FileVersion == 刚写的版本？"}
     G2 -->|否| STOP2["停：publish 目录里坐的是旧构建"]
-    G2 -->|是| G3{"目录里只有那一个 exe？"}
+    G2 -->|是| G3{"目录里只有本次那一个 exe？"}
     G3 -->|是| DONE["交付：单 exe 就是全部<br/>（框架依赖档另需目标机装 Desktop Runtime 10.x）"]
     G3 -->|否| STOP
 ```
+
+产物命名固定为 `QuickPanel_v<Version>_<self_contained|no_runtime>_build_<yyyyMMddHHmmss>.exe`：脚本从 csproj 的 `<Version>` 现读版本，selftest 通过后生成时间戳并把发布工作名改成最终名；例如 `QuickPanel_v1.0.0_self_contained_build_20261026114657.exe`。发版前清空两个产物目录，目录里只留本轮两个 exe。
 
 ---
 
@@ -467,7 +469,7 @@ flowchart TD
 | 窗口默认 / 下限 | 1120×760 / 860×560×系数（钳到工作区） | `SettingsService`、`MainWindow.xaml` |
 | 切分组耗时（右栏常驻后） | 再次进入 3–25 ms；首次进入 56–102 ms；改前 181–328 ms | `doc` §7.3 |
 | 构建警告 | 固定 **9 条**（CS0414×5、CS1574×4，全来自 `lib/`） | `dotnet build --no-incremental` |
-| 产物 | `1,679,030 B`（框架依赖）/ `70,291,809 B`（自带运行时），各**只有一个 exe** | `publish*.cmd` 输出 |
+| 产物 | `1,627,830 B`（框架依赖）/ `70,420,731 B`（自带运行时），本次构建各一个 | `publish*.cmd` 输出；名称为 `QuickPanel_v1.0.0_<mode>_build_<时间戳>.exe` |
 | 版本 | app `1.0.0`（→ `FileVersion 1.0.0.0`）；lib `3.0.0` | csproj + 发布守门比对 |
 | `lib/` 偏离上游 | **2 个文件、4 处改动**（`UI4NavigationView.cs`、`UI4GridView.cs`），种子未回灌 | `doc` §7.1 的 `diff -rq` |
 | 设置文件 | `%APPDATA%\QuickPanel\settings.json`，kv1，9 个键 | `SettingsService` |

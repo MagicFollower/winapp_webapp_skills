@@ -250,15 +250,17 @@ exit=2
 
 ## 3. 打包与启动
 
-两个脚本，产物名靠 `-p:ArtifactLabel=` 分档、互不覆盖。**脚本末尾有 `pause`**，交互式双击用；无人值守要喂一行空输入让它过去：
+两个脚本用 `-p:ArtifactLabel=` 生成发布工作名（`QuickPanel_self_contained` / `QuickPanel_no_runtime`），selftest 后按 csproj 的 `<Version>` 与构建时间改成最终交付名 `QuickPanel_v<Version>_<mode>_build_<yyyyMMddHHmmss>.exe`。**脚本末尾有 `pause`**，交互式双击用；无人值守要喂一行空输入让它过去：
 
     '' | .\publish_no_runtime.cmd
     '' | .\publish.cmd
 
 | 档位 | 产物 | 目标机要求 | 本机实测 |
 |---|---|---|---|
-| 框架依赖 | `publish_no_runtime\QuickPanel_no_runtime.exe` | 必须已装 `Microsoft.WindowsDesktop.App` 10.x | `1,679,030 B`（2026-10-04 本轮，90 项数据源） |
-| 自带运行时 | `publish\QuickPanel_self_contained.exe` | 免装 .NET | `70,291,809 B`（同上；**运行时包已在 NuGet 缓存里**的口径，首次跑还要下约 150 MB，耗时不在此列） |
+| 框架依赖 | `publish_no_runtime\QuickPanel_v<Version>_no_runtime_build_<yyyyMMddHHmmss>.exe` | 必须已装 `Microsoft.WindowsDesktop.App` 10.x | `1,627,830 B`（2026-10-26 新命名实测；旧记录 `1,679,030 B`） |
+| 自带运行时 | `publish\QuickPanel_v<Version>_self_contained_build_<yyyyMMddHHmmss>.exe` | 免装 .NET | `70,420,731 B`（2026-10-26 新命名实测；旧记录 `70,291,809 B`；**运行时包已在 NuGet 缓存里**的口径，首次跑还要下约 150 MB，耗时不在此列） |
+
+（尺寸里的旧记录是 2026-10-04 的实测；新脚本的最终文件名与路径以脚本第 3 步打印的行为准。）
 
 判据（两档都要满足）：
 
@@ -266,7 +268,8 @@ exit=2
 2. 产物目录里**只有那一个 exe**（`DebugType=embedded` 是全局属性，`lib` 也不会留散落 pdb）。
 3. 起打包产物并读回窗口标题——**必须用本轮重新打包的 exe**：
 
-       $p = Start-Process -FilePath .\publish\QuickPanel_self_contained.exe -PassThru
+       $exe = Get-ChildItem .\publish\QuickPanel_v*_self_contained_build_*.exe | Sort-Object LastWriteTime | Select-Object -Last 1
+       $p = Start-Process -FilePath $exe.FullName -PassThru
        Start-Sleep -Seconds 6
        $p.Refresh(); $p.MainWindowTitle
        Stop-Process -Id $p.Id -Force
@@ -274,7 +277,7 @@ exit=2
    判据：标题等于本轮源码里的 `Title`。拿上一轮的 exe 验本轮改动会假红（实测踩过：改完标题拿旧产物匹配，得出"打包版不出窗"的错误结论）。
 4. 自带运行时档**首次启动**要把原生库解到 `%TEMP%\.net\QuickPanel_self_contained\`，会比后续启动慢；记下两次的耗时再下结论。
 
-实测输出（收尾这一轮：先 `Remove-Item` 清空两个产物目录，再跑脚本；脚本自己会跑第 2 步的 selftest）：
+实测输出（收尾这一轮：先 `Remove-Item` 清空两个产物目录，再跑脚本；脚本自己会跑第 2 步的 selftest。**以下是 2026-10-04 旧命名记录，保留不改**；新脚本输出名见上表）：
 
 ```
 [2/3] self-test of the packaged exe (exit code = failed assertion count)
@@ -389,21 +392,22 @@ EXE QuickPanel_self_contained.exe    ICON 32x32 center=#4F6BE8  corner(1,1) a=0 
 
 1. 改 `app\QuickPanel.csproj` 的 `<Version>`（当前 `1.0.0`）。
 2. 重新打包要交付的那一档。
-3. **守门比对**：产物的 `FileVersion` 必须等于刚写的版本，否则 `publish\` 里坐的是旧构建。
+3. **守门比对**：产物的 `FileVersion` 必须等于刚写的版本，否则说明用的是旧构建。先取本轮最新产物：
 
-       (Get-Item .\publish\QuickPanel_self_contained.exe).VersionInfo.FileVersion
+       $exe = Get-ChildItem .\publish\QuickPanel_v*_self_contained_build_*.exe | Sort-Object LastWriteTime | Select-Object -Last 1
+       $exe.VersionInfo.FileVersion
 
-   判据：`0.1.0.0`（`<Version>0.1.0</Version>` 派生）。**先删空 `publish\` 与 `publish_no_runtime\` 再打包**，否则上一轮 exe 会蒙过这一步。
+   判据：`1.0.0.0`（当前 `<Version>1.0.0</Version>` 派生）。**先删空 `publish\` 与 `publish_no_runtime\` 再打包**，否则旧构建会混进目录。
 4. 拷贝清单：单 exe 就是全部（框架依赖档另需目标机有 Desktop Runtime 10.x）。
 5. 每个交付包落地后再跑一次 `--selftest`，退出码 0 才算发出去：
 
-       & .\publish\QuickPanel_self_contained.exe --selftest; $LASTEXITCODE
+       & $exe --selftest; $LASTEXITCODE
 
-- 校验和（有分发目录才需要）：`Get-FileHash .\publish\QuickPanel_self_contained.exe -Algorithm SHA256`，把 `.sha256` 与 exe 同目录放。本次没有建分发目录 → **未验证**（不是跑不通，是本轮没跑）。
-- 归档命名带上档位（`_self_contained` / `_no_runtime`），两档体积差两个数量级（本轮 `70,291,809 B` 对 `1,679,030 B`），别说"这个包 1.4 MB"却不标是哪档。
+- 校验和（有分发目录才需要）：`Get-FileHash $exe.FullName -Algorithm SHA256`，把 `.sha256` 与 exe 同目录放。本次没有建分发目录 → **未验证**（不是跑不通，是本轮没跑）。
+- 归档命名固定带版本、档位与构建时间：`QuickPanel_v<Version>_<self_contained|no_runtime>_build_<yyyyMMddHHmmss>.exe`；两档体积差两个数量级（本轮 `70,420,731 B` 对 `1,627,830 B`），别说"这个包 1.4 MB"却不标是哪档。
 - 目标机排查顺序：`dotnet --list-runtimes` 有没有 WindowsDesktop 10.x → 是不是被杀软拦在首次解包 → `%APPDATA%\QuickPanel\selftest.txt` 有没有红。
 
-实测输出（守门比对 + 两档各自再跑一次 `--selftest`）：
+实测输出（守门比对 + 两档各自再跑一次 `--selftest`。**以下是 2026-10-04 旧命名记录，保留不改**；新脚本的产物名见第 3 节上表）：
 
 ```
 QuickPanel_self_contained.exe  FileVersion=0.1.0.0  ProductVersion=0.1.0  size=70291809
