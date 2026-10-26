@@ -94,7 +94,8 @@
 2. 产物目录里**只有那一个 exe**（`DebugType=embedded` 是全局属性，`lib` 也不会留散落 pdb）。
 3. 起打包产物并读回窗口标题——**必须用本轮重新打包的 exe**：
 
-       $p = Start-Process -FilePath .\publish\__APPNAME___self_contained.exe -PassThru
+       $exe = Get-ChildItem .\publish\__APPNAME___v*_self_contained_build_*.exe | Sort-Object LastWriteTime | Select-Object -Last 1
+       $p = Start-Process -FilePath $exe.FullName -PassThru
        Start-Sleep -Seconds 6
        $p.Refresh(); $p.MainWindowTitle
        Stop-Process -Id $p.Id -Force

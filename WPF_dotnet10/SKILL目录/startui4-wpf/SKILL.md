@@ -1,6 +1,6 @@
 ---
 name: startui4-wpf
-description: 用 StartUI4Controls（StartUI4.WPF v3.0.0，net10.0-windows 纯 C# 模板 WPF 组件库）搭工程、改界面与发版本的可复现流程——app/+lib/ 源码自包含骨架（lib 种子本地优先、按 manifest 回源，自持基线 48 文件/DP 238）、UI4Theme 38 令牌与 UI4.Font.* 排印键、开工前四挡决策（明暗/分发/套装与局部换肤/设置按钮与面板内容）、设置面板（应用信息/配色/字体/全局缩放，kv1 落盘与 ZoomedSize 下限）、启动顺序与 DWM 标题栏、UI4 控件用法（对话框/托盘/代码编辑器、菜单长文字截断、GridView 横向固定、NavigationView ItemFontSize）、UI4NavigationView 左栏默认壳（NavigationRailCase，右内容四角/12px 间距/项边距/主题重打）、官方 WPF TabControl+TabItem 左栏可滚页签模板（assets/templates/cases，含 TabItem.Margin 双扣导致底部圆角被裁的修复）、卡片网格拖动排序（八角色、PART_ItemRoot、最近槽位、ObservableCollection.Move+FLIP）、自适应当编码期约束、间距/阴影/悬浮余量、单文件两档发布与 --selftest 门禁、FileVersion 守门、字母像素图标生成、T0Level 八节文档与目录收敛、既有工程修 bug/优化的 5.1–5.3 三步流程（分析→最小化修改+自检→当日修复清单）、lib 改动回灌种子/重钉清单/三工程同步。当需要新建 .NET 10 WPF 应用、写/改 UI4* 的 XAML/C#、加设置页/主题/字号缩放、切主题或调字号后某处没跟着变、DynamicResource 解析不到、组件源码缺失、深色对比度不对、打包 WPF 单 exe、补上手文档或收敛工程、在既有 StartUI4 工程修缺陷/做优化时使用；不用于 WinForms、UWP/WinUI、.NET Framework 48 版 StartUI4 或不含该库的普通 WPF 页面。
+description: 用 StartUI4Controls（StartUI4.WPF v3.0.0，net10.0-windows 纯 C# 模板 WPF 组件库）搭工程、改界面与发版本的可复现流程——app/+lib/ 源码自包含骨架（lib 种子本地优先、按 manifest 回源，自持基线 48 文件/DP 238）、UI4Theme 38 令牌与 UI4.Font.* 排印键、开工前四挡决策（明暗/分发/套装与局部换肤/设置按钮与面板内容）、设置面板（应用信息/配色/字体/全局缩放，kv1 落盘与 ZoomedSize 下限）、启动顺序与 DWM 标题栏、UI4 控件用法（对话框/托盘/代码编辑器、菜单长文字截断、GridView 横向固定、NavigationView ItemFontSize）、UI4NavigationView 左栏默认壳（NavigationRailCase，右内容四角/12px 间距/项边距/主题重打）、官方 WPF TabControl+TabItem 左栏可滚页签模板（assets/templates/cases，含 TabItem.Margin 双扣导致底部圆角被裁的修复）、卡片网格拖动排序（八角色、PART_ItemRoot、最近槽位、ObservableCollection.Move+FLIP）、自适应当编码期约束、间距/阴影/悬浮余量、单文件两档发布（产物名 `<App>_v<Version>_<mode>_build_<yyyyMMddHHmmss>.exe`）与 --selftest 门禁、FileVersion 守门、字母像素图标生成、T0Level 八节文档与目录收敛、既有工程修 bug/优化的 5.1–5.3 三步流程（分析→最小化修改+自检→当日修复清单）、lib 改动回灌种子/重钉清单/三工程同步。当需要新建 .NET 10 WPF 应用、写/改 UI4* 的 XAML/C#、加设置页/主题/字号缩放、切主题或调字号后某处没跟着变、DynamicResource 解析不到、组件源码缺失、深色对比度不对、打包 WPF 单 exe、补上手文档或收敛工程、在既有 StartUI4 工程修缺陷/做优化时使用；不用于 WinForms、UWP/WinUI、.NET Framework 48 版 StartUI4 或不含该库的普通 WPF 页面。
 ---
 
 # StartUI4.WPF 桌面应用搭建与组件使用
@@ -306,7 +306,7 @@ if (picked.HasValue) UI4Theme.SetAccent(picked.Value);
 
 ## Step 6 — 发布两档 + 自测门禁
 
-`publish.cmd` → `<App>_self_contained.exe`（约 60+ MB，目标机免装 .NET；首次要下 150 MB 运行时包）；`publish_no_runtime.cmd` → `<App>_no_runtime.exe`（约 2–3 MB，目标机必须有 `Microsoft.WindowsDesktop.App 10.x`）。两档靠 `-p:ArtifactLabel=` 分产物名、互不覆盖，`DebugType=embedded` 是全局属性所以 `lib` 项目也不会留散落 pdb。
+`publish.cmd` → `<App>_v<Version>_self_contained_build_<yyyyMMddHHmmss>.exe`（约 60+ MB，目标机免装 .NET；首次要下 150 MB 运行时包）；`publish_no_runtime.cmd` → `<App>_v<Version>_no_runtime_build_<yyyyMMddHHmmss>.exe`（约 2–3 MB，目标机必须有 `Microsoft.WindowsDesktop.App 10.x`）。`-p:ArtifactLabel=` 只生成发布工作名；脚本从 app csproj 用 `dotnet msbuild <App>.csproj -getProperty:Version -nologo` 现读 `<Version>`，selftest 后用 `Get-Date -Format yyyyMMddHHmmss` 生成时间戳，再把固定工作名改成最终名。示例：`QuickPanel_v1.0.0_self_contained_build_20261026114657.exe`、`QuickPanel_v1.0.0_no_runtime_build_20261026020955.exe`。两档目录互不覆盖，`DebugType=embedded` 是全局属性所以 `lib` 项目也不会留散落 pdb。
 
 两个开关分档的原因（写在自己的发布脚本里要照抄）：`EnableCompressionInSingleFile` 只对自带运行时合法，框架依赖发布会 `NETSDK1176`；WPF 的 `PresentationNative_*` / `wpfgfx_*` / `D3DCompiler_47_*` 没法从 bundle 直接 `LoadLibrary`，要靠 `IncludeNativeLibrariesForSelfExtract` 运行期解到 `%TEMP%\.net\<程序集名>\`。
 
@@ -498,7 +498,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 
 两条判据：
 
-1. 已打好的包不依赖中间目录——删掉 `bin\`/`obj\` 后 `publish\__APPNAME___self_contained.exe --selftest` 照样退 0（单文件包自含全部依赖）。
+1. 已打好的包不依赖中间目录——删掉 `bin\`/`obj\` 后 `publish\__APPNAME___v*_self_contained_build_*.exe --selftest` 照样退 0（单文件包自含全部依赖）。
 2. 删完能一把重建：`dotnet build app\<App>.csproj` 从零产出、两档 publish 再跑一次全绿，警告仍是上游那 9 条。
 
 自查口径：`Get-ChildItem` 结果里除 `bin/obj/publish*` 外，每一项都应能归进"代码 / 文档 / 脚本 / 配置 / 产物"五类之一，归不进去的就是残留。
@@ -602,7 +602,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 1. `fetch-source.ps1` → `LOCAL 48/48 未联网` 或 `VERIFY ok 48/48`（种子完整才继续）。
 2. `dotnet build app\<App>.csproj --no-incremental` → `0 个错误`，警告恰好是上游那 9 条（`CS0414`×5 + `CS1574`×4）。
 3. `<App>.exe --selftest` → 退出码 0，`%APPDATA%\<App>\selftest.txt` 全 `PASS`（模板实测 67 条）。三段各自的判据见 Step 6：配色与令牌（含**明暗策略已显式决策**、**预置套装 × 38 令牌资源键齐全**、**字典与定义同源**）、设置通路（哨兵往返 / 键名点名 / 钳位）、排印与缩放（库兜底键 / 覆盖换档仍在 / 层级 / 固定件尺寸 / 转换器边界 / **两块 XAML 能构造**）。
-4. 先删空 `publish\` 与 `publish_no_runtime\`，再跑两档 → 产物目录各自**只有一个 exe**，脚本内 `selftest exit code: 0`。
+4. 先删空 `publish\` 与 `publish_no_runtime\`，再跑两档 → 产物目录各自**只有一个本次 exe**，文件名必须是 `<App>_v<Version>_<mode>_build_<yyyyMMddHHmmss>.exe`，版本段等于 csproj 的 `<Version>`；脚本内 `selftest exit code: 0`。
 5. 守门：`(Get-Item <exe>).VersionInfo.FileVersion` 等于 csproj 的 `<Version>`（`0.1.0` → `0.1.0.0`）。不等就是在交旧构建。
 6. 起**本轮**产物、按自己起的 pid 读 `MainWindowTitle` = 源码里的 `Title`；设置面板里每一档都改观感、原生 `TextBlock` 那行也要变（它证明宿主 `{DynamicResource}` 通路接通）、底部生效键从 `light` 变到 `dark`/`paper-grey`；收尾 `Stop-Process -Id`，残留 `Get-Process -Name <App>*` 数为 0。
 7. 图标：`[System.Drawing.Icon]::ExtractAssociatedIcon(<exe>)` 取回内嵌位图，按图样的特征取色点逐像素命中（字节数与旧图标相同是正常的，体积不是判据）；生成式图标还要看 `make-icon.ps1` 自己那两条自证——目录帧数与 `frames=7` 对上、16/32 两档 `corner.alpha=0`（圆角透明没被 `<ApplicationIcon>` 吃掉）。
@@ -624,6 +624,8 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 | `dotnet run` 到窗口出现 | 2,985 ms | Debug，进程内首帧 |
 | `publish_no_runtime.cmd` | 3 s，`T0Probe_no_runtime.exe` 1,431,204 B | Release 单文件框架依赖 |
 | `publish.cmd` | 9 s，`T0Probe_self_contained.exe` 70,288,063 B | Release 单文件自带运行时；**首次**跑还要下载运行时包（脚本自己提示约 150 MB），耗时不在此列 |
+
+注：2026-10-26 起两档产物名改为 `<App>_v<Version>_<mode>_build_<yyyyMMddHHmmss>.exe`；上表 2026-10-03 的 `T0Probe_*` 是旧固定名实测，仅作体积/耗时参考，别拿旧名去找新产物。
 | 打包版起窗口 | 约 5 s 内出窗 | 已解包过的缓存态；首次要解到 `%TEMP%\.net\` |
 | `--selftest` | 退出码 0 | Debug 与两档产物都跑过；报告行数见下（模板工程 68 行，示例项目1 是四段合成 `PASS 断言组=240`） |
 
