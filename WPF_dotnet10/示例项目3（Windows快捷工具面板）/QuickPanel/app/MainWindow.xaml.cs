@@ -62,6 +62,9 @@ namespace QuickPanel
         /// 让两侧“可见白边”都是 4 px。</summary>
         private const double NavItemRightInset = NavItemSideInset + 1;
 
+        /// <summary>上下也留 4 px：首个悬浮卡片避开栏顶的 12 px 圆角；上下对称，内容垂直中心不变。</summary>
+        private const double NavItemVerticalInset = 4;
+
         /// <summary>防止同一个内部 ListBox 重复挂 StatusChanged；容器在虚拟化/主题重建后要重新补右边距。</summary>
         private readonly HashSet<ListBox> _navListBoxesWithMarginHook = new HashSet<ListBox>();
 
@@ -157,8 +160,9 @@ namespace QuickPanel
         /// 导航项容器的宽度绑定的是 LeftPanelWidth，而 UI4ListBox 模板里的 ScrollViewer 自带
         /// 4 px 内边距；容器比视口宽 8 px，右侧连同 6 px 圆角一起被裁平。宿主把内部 ListBox 的
         /// ScrollViewer 内边距归零，让悬浮/选中的灰底在栏内完整显示。
-        /// 同时统一项背景的左右内缩：库模板只写了 Margin="2,0,0,0"，现在左 4 px、右 5 px
-        /// （多出的 1 px 补左栏 Border 的 1 px 右边框），逐项补，并挂 StatusChanged 覆盖新容器。
+        /// 同时统一项背景的左右内缩：库模板只写了 Margin="2,0,0,0"，现在左 4 px、右 5 px、
+        /// 上下各 4 px（右多 1 px 补左栏 Border 的 1 px 右边框；上下让首个卡片避开栏顶圆角），
+        /// 逐项补，并挂 StatusChanged 覆盖新容器。
         /// </summary>
         private void StyleNavListBoxViewport()
         {
@@ -196,8 +200,7 @@ namespace QuickPanel
                 var border = container.Template.FindName("PART_ItemBorder", container) as Border;
                 if (border == null) continue;
 
-                var m = border.Margin;
-                border.Margin = new Thickness(NavItemSideInset, m.Top, NavItemRightInset, m.Bottom);
+                border.Margin = new Thickness(NavItemSideInset, NavItemVerticalInset, NavItemRightInset, NavItemVerticalInset);
             }
         }
 
