@@ -8,11 +8,12 @@
   ..\run.cmd            → dotnet build + 启动 app\bin\Debug\net10.0-windows\__APPNAME__.exe
   ..\run.cmd selftest   → 构建 + 跑 --selftest，退出码与报告直接打在控制台
 
-一键打包单 exe（上级目录两个脚本，产物文件名带模式后缀）
-  publish.cmd            → ..\publish\__APPNAME___self_contained.exe  约 60+ MB，运行时在包里，目标机免装 .NET
-  publish_no_runtime.cmd → ..\publish_no_runtime\__APPNAME___no_runtime.exe  约 2-3 MB，
+一键打包单 exe（上级目录两个脚本，产物名 = 应用名_v<Version>_<mode>_build_<yyyyMMddHHmmss>.exe）
+  publish.cmd            → ..\publish\__APPNAME___v<Version>_self_contained_build_<yyyyMMddHHmmss>.exe  约 60+ MB，运行时在包里，目标机免装 .NET
+  publish_no_runtime.cmd → ..\publish_no_runtime\__APPNAME___v<Version>_no_runtime_build_<yyyyMMddHHmmss>.exe  约 2-3 MB，
                            但目标机必须先装 .NET 10 Desktop Runtime（dotnet --list-runtimes 看得到
                            Microsoft.WindowsDesktop.App 10.x 就行）
+                          <Version> 从 app\__APPNAME__.csproj 现读，时间戳在 selftest 后生成；实际名字看脚本第 3 步
 
 设置自测（退出码 = 失败断言数，0 为全通过）
   __APPNAME___self_contained.exe --selftest

@@ -83,8 +83,10 @@
 
 | 档位 | 产物 | 目标机要求 | 本机实测 |
 |---|---|---|---|
-| 框架依赖 | `publish_no_runtime\__APPNAME___no_runtime.exe` | 必须已装 `Microsoft.WindowsDesktop.App` 10.x | `【模板】体积 + 耗时` |
-| 自带运行时 | `publish\__APPNAME___self_contained.exe` | 免装 .NET | `【模板】体积 + 耗时；首次跑要多等运行时包下载（约 150 MB）` |
+| 框架依赖 | `publish_no_runtime\__APPNAME___v<Version>_no_runtime_build_<yyyyMMddHHmmss>.exe` | 必须已装 `Microsoft.WindowsDesktop.App` 10.x | `【模板】体积 + 耗时` |
+| 自带运行时 | `publish\__APPNAME___v<Version>_self_contained_build_<yyyyMMddHHmmss>.exe` | 免装 .NET | `【模板】体积 + 耗时；首次跑要多等运行时包下载（约 150 MB）` |
+
+产物名由脚本从 `app\__APPNAME__.csproj` 的 `<Version>` 现读版本，selftest 后生成 `yyyyMMddHHmmss` 并把发布工作名改成上述名字；实际路径以脚本第 3 步打印为准。
 
 判据（两档都要满足）：
 
@@ -173,18 +175,19 @@
 
 1. 改 `app\__APPNAME__.csproj` 的 `<Version>`（当前 `0.1.0`）。
 2. 重新打包要交付的那一档。
-3. **守门比对**：产物的 `FileVersion` 必须等于刚写的版本，否则 `publish\` 里坐的是旧构建。
+3. **守门比对**：产物的 `FileVersion` 必须等于刚写的版本，否则说明用的是旧构建。先取本轮最新产物：
 
-       (Get-Item .\publish\__APPNAME___self_contained.exe).VersionInfo.FileVersion
+       $exe = Get-ChildItem .\publish\__APPNAME___v*_self_contained_build_*.exe | Sort-Object LastWriteTime | Select-Object -Last 1
+       $exe.VersionInfo.FileVersion
 
-   判据：`0.1.0.0`（`<Version>0.1.0</Version>` 派生）。**先删空 `publish\` 与 `publish_no_runtime\` 再打包**，否则上一轮 exe 会蒙过这一步。
+   判据：`0.1.0.0`（`<Version>0.1.0</Version>` 派生）；文件名版本段应是 `v0.1.0`。**先删空 `publish\` 与 `publish_no_runtime\` 再打包**，否则旧构建会混进目录。
 4. 拷贝清单：单 exe 就是全部（框架依赖档另需目标机有 Desktop Runtime 10.x）。
 5. 每个交付包落地后再跑一次 `--selftest`，退出码 0 才算发出去：
 
-       & .\publish\__APPNAME___self_contained.exe --selftest; $LASTEXITCODE
+       & $exe --selftest; $LASTEXITCODE
 
-- 校验和（有分发目录才需要）：`Get-FileHash .\publish\__APPNAME___self_contained.exe -Algorithm SHA256`，把 `.sha256` 与 exe 同目录放。
-- 归档命名带上档位（`_self_contained` / `_no_runtime`），两档体积差两个数量级（`【模板】实测两档字节数`），别说"这个包 1.4 MB"却不标是哪档。
+- 校验和（有分发目录才需要）：`Get-FileHash $exe.FullName -Algorithm SHA256`，把 `.sha256` 与 exe 同目录放。
+- 归档命名固定为 `__APPNAME___v<Version>_<self_contained|no_runtime>_build_<yyyyMMddHHmmss>.exe`；版本段必须等于 csproj `<Version>`，两档体积差两个数量级（`【模板】实测两档字节数`），别说"这个包 1.4 MB"却不标是哪档。
 - 目标机排查顺序：`dotnet --list-runtimes` 有没有 WindowsDesktop 10.x → 是不是被杀软拦在首次解包 → `%APPDATA%\__APPNAME__\selftest.txt` 有没有红。
 
 实测输出：
