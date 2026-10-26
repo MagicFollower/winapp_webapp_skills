@@ -1,6 +1,6 @@
 ---
 name: startui4-wpf
-description: 用 StartUI4Controls（StartUI4.WPF v3.0.0，net10.0-windows 纯 C# 模板 WPF 组件库）搭工程、改界面与发版本的可复现流程——app/+lib/ 源码自包含骨架（lib 种子本地优先、按 manifest 回源，自持基线 48 文件/DP 238）、UI4Theme 38 令牌与 UI4.Font.* 排印键、开工前四挡决策（明暗/分发/套装与局部换肤/设置按钮与面板内容）、设置面板（应用信息/配色/字体/全局缩放，kv1 落盘与 ZoomedSize 下限）、启动顺序与 DWM 标题栏、UI4 控件用法（对话框/托盘/代码编辑器、菜单长文字截断、GridView 横向固定、NavigationView ItemFontSize）、官方 WPF TabControl+TabItem 左栏可滚页签模板（assets/templates/cases，含 TabItem.Margin 双扣导致底部圆角被裁的修复）、卡片网格拖动排序（八角色、PART_ItemRoot、最近槽位、ObservableCollection.Move+FLIP）、自适应当编码期约束、间距/阴影/悬浮余量、单文件两档发布与 --selftest 门禁、FileVersion 守门、字母像素图标生成、T0Level 八节文档与目录收敛、既有工程修 bug/优化的 5.1–5.3 三步流程（分析→最小化修改+自检→当日修复清单）、lib 改动回灌种子/重钉清单/三工程同步。当需要新建 .NET 10 WPF 应用、写/改 UI4* 的 XAML/C#、加设置页/主题/字号缩放、切主题或调字号后某处没跟着变、DynamicResource 解析不到、组件源码缺失、深色对比度不对、打包 WPF 单 exe、补上手文档或收敛工程、在既有 StartUI4 工程修缺陷/做优化时使用；不用于 WinForms、UWP/WinUI、.NET Framework 48 版 StartUI4 或不含该库的普通 WPF 页面。
+description: 用 StartUI4Controls（StartUI4.WPF v3.0.0，net10.0-windows 纯 C# 模板 WPF 组件库）搭工程、改界面与发版本的可复现流程——app/+lib/ 源码自包含骨架（lib 种子本地优先、按 manifest 回源，自持基线 48 文件/DP 238）、UI4Theme 38 令牌与 UI4.Font.* 排印键、开工前四挡决策（明暗/分发/套装与局部换肤/设置按钮与面板内容）、设置面板（应用信息/配色/字体/全局缩放，kv1 落盘与 ZoomedSize 下限）、启动顺序与 DWM 标题栏、UI4 控件用法（对话框/托盘/代码编辑器、菜单长文字截断、GridView 横向固定、NavigationView ItemFontSize）、UI4NavigationView 左栏默认壳（NavigationRailCase，右内容四角/12px 间距/项边距/主题重打）、官方 WPF TabControl+TabItem 左栏可滚页签模板（assets/templates/cases，含 TabItem.Margin 双扣导致底部圆角被裁的修复）、卡片网格拖动排序（八角色、PART_ItemRoot、最近槽位、ObservableCollection.Move+FLIP）、自适应当编码期约束、间距/阴影/悬浮余量、单文件两档发布与 --selftest 门禁、FileVersion 守门、字母像素图标生成、T0Level 八节文档与目录收敛、既有工程修 bug/优化的 5.1–5.3 三步流程（分析→最小化修改+自检→当日修复清单）、lib 改动回灌种子/重钉清单/三工程同步。当需要新建 .NET 10 WPF 应用、写/改 UI4* 的 XAML/C#、加设置页/主题/字号缩放、切主题或调字号后某处没跟着变、DynamicResource 解析不到、组件源码缺失、深色对比度不对、打包 WPF 单 exe、补上手文档或收敛工程、在既有 StartUI4 工程修缺陷/做优化时使用；不用于 WinForms、UWP/WinUI、.NET Framework 48 版 StartUI4 或不含该库的普通 WPF 页面。
 ---
 
 # StartUI4.WPF 桌面应用搭建与组件使用
@@ -30,6 +30,7 @@ StartUI4Controls 是**零 XAML** 的 WPF 组件库：39 个 `UI4*` 控件的模�
 - 用户报"字号调大后按钮里的字跑偏 / 设置里恢复默认后下拉框空白 / 缩放后窗口拖不动"这类观感问题（多数不是渲染 bug，而是钉死尺寸、层级抹平、ComboBox 清空列表外值这三条机制）。
 - 托盘图标、原生标题栏染色、代码编辑器、右键菜单这类系统集成面。
 - 要用官方 WPF `TabControl` + `TabItem` 做左侧可滚页签（固定页签 + 内容区，保留键盘与自动化语义）：复制 `assets/templates/cases/OfficialTabCase.xaml(.cs)`；`TabItem` 不要用 `Margin` 做间隔（会触发布局裁剪切掉底部圆角），细则与验收见 `references/host-integration.md` 的「官方 WPF TabControl + TabItem」。
+- 要用 `UI4NavigationView` 做左侧导航：默认复制 `assets/templates/cases/NavigationRailCase.xaml` + `.xaml.cs`（替换 `__APPNAME__`）；它已封装右内容面板四角/12 px 间距、标题 24、导航项背景边距与切主题重打，不要各自重写一套宿主补丁。
 - 要在 `UI4GridView` 或任意卡片网格上做**拖动排序**（卡片跟手、其余卡片让位动画、首尾/空隙任意落点、松手才落盘），或遇到"松手页面跳一下 / 拖动只在卡片上生效 / 拖动后悬浮放大失效"：照「实战场景：卡片网格拖动排序（组件内通用方案）」的八角色契约与七步做。
 - 组件源码目录是空目录或缺文件（`assets/seed/lib`、或既有工程的 `lib/`）——跑 `fetch-source.ps1` 按清单补齐，别手工从上游粘文件。
 - 示例工程或用户工程里改了 `lib/` 组件源码，要把改动**并回种子并对齐三个示例工程**：走「源码来源与升级」第 1 条那条链（回灌种子 → 重钉清单 → `LOCAL 48/48` → `references/` 同步 → 反向回灌 → 三工程各 `build` + `--selftest`），别只改一个工程就收工——那样下一个用这个 Skill 生成的工程会把已修掉的缺陷重新领一遍。
@@ -197,6 +198,14 @@ bool isDark = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B < 128;   // 与 UI4Wind
 - `UI4Grid.Background` 会被库的 `UpdateBackground()` 直接 `SetValue` 写回渐变，宿主赋的底色在主题切换时丢失。
 
 左栏页签要保留官方 `TabControl`/`TabItem` 的键盘与自动化语义时，用 `assets/templates/cases/OfficialTabCase.xaml` 的完整案例：左侧 `TabPanel` 必须套 `ScrollViewer`，页签间隔写在模板的 4px 间隔行而不是 `TabItem.Margin`。细则与验收见 `references/host-integration.md`。
+
+**左侧导航栏（UI4NavigationView）默认壳**：只要用 `UI4NavigationView` 做左栏，默认复制 `assets/templates/cases/NavigationRailCase.xaml` + `.xaml.cs`（替换 `__APPNAME__`），不要再各自手写一套宿主补丁。口径与 QuickPanel 现网一致：
+
+- `Nav.Background="Transparent"`；左栏与右内容两张卡片之间 12 px；右内容面板四角 12、顶部内缩 20。
+- 内容标题左边距 24（= 首卡 `ItemMargin="20"` + `UI4GridView` 内部 4）；首卡用 `ItemMargin="20"`。
+- 导航项背景四周内缩：左 4、右 5（补左栏 1 px 右边框）、上下 4；内部 `UI4ListBox` 的 ScrollViewer 内边距归零。首卡因此避开栏顶圆角，上下对称使图标/文字中心不动。
+- 这些值在库模板里没有公开 DP，case 的 code-behind 在 `Loaded` 与 `UI4Theme.ThemeChanged` 的 `Loaded`/`ApplicationIdle` 重打；**不要只在启动时设一次**——`UI4ListBox.OnStyleRefresh` 换主题会重建模板，内部 ScrollViewer 的 4 px Padding 会回来。
+- 嵌进现有窗口时，把 case 里的 `ApplyChrome` / `StyleContentPanel` / `StyleLeftRail` / `StyleListBoxViewport` / `ApplyItemMargins` 原样搬过去，并在窗口关闭时 `DisposeChrome`；不要另写第二套。
 
 主窗口骨架（实测可编译可跑）：`ui:UI4Grid` 铺页面渐变 → 内部普通 `Grid` 分行 → 工具条 `ui:UI4Button` + 内容 `ui:UI4Panel`。**不要**自绘标题栏、不要 `WindowStyle=None` + `AllowsTransparency=true`：窗口里出现过 UI4 控件，库就在 `Loaded` 时按 DWM 把原生标题栏染好。完全不含 UI4 控件的窗口要手动 `UI4WindowTitleBar.Apply(win)`，否则它等到下次主题切换才被扫到。
 
@@ -662,6 +671,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 - `references/theming.md` — 38 令牌与资源键规则、**排印键 `UI4.Font.*` 与两层覆盖**、`UI4Theme`/`UI4ThemeScope`/`UI4ThemePacks` API、8 套预置键与场景、系统跟随与持久化、DWM 标题栏四条通路。
 - `references/host-integration.md` — app 侧契约：csproj 双侧关键行、`app.manifest` DPI 逐字、**启动序列九步六条硬约束（含排印覆盖要在装字典之后、带事件处理器的模板要住在本 XAML 的宿主里）**、宿主配色单源→令牌的写法、设置底座六个文件的职责、自测契约（配色 / 设置 / 排印三段各钉什么，含三个示例项目各自的断言规模）、图标三处通路、官方 WPF `TabControl` + `TabItem` 左栏可滚页签的三条硬约束与验收。
 - `assets/templates/cases/OfficialTabCase.xaml(.cs)` — 官方 WPF `TabControl` + `TabItem` 的左栏可滚页签完整案例（13 页、keyed 样式、4px 间隔行、`UI4ScrollViewer`）；复制到 `app/Views/` 后替换 `__APPNAME__`。细则与验收见 `references/host-integration.md` 的「官方 WPF TabControl + TabItem」。
+- `assets/templates/cases/NavigationRailCase.xaml(.cs)` — `UI4NavigationView` 左侧导航的**默认宿主壳**：右内容四角 12/左侧 12 px 间距/顶部 20、标题左边 24、首卡 `ItemMargin=20`、导航项背景左 4/右 5/上下 4、内部 ScrollViewer 内边距归零，以及 `UI4Theme.ThemeChanged` 的 Loaded/ApplicationIdle 重打。复制到 `app/Views/` 后替换 `__APPNAME__`；数据项与页面内容换成真实来源。
 - `示例项目3（Windows快捷工具面板）/QuickPanel` — 随 Skill 附带的完整参考实现，也是「实战场景：卡片网格拖动排序（组件内通用方案）」的首个落地实例；该场景在 `README.md` §11–§12、`app/MainWindow.xaml`（手柄标记 + Preview 事件）、`app/MainWindow.xaml.cs`（拖动管线与 FLIP）、`ViewModels/ToolSection.cs`（有序集合 + `MoveFavoriteItem`）、`ViewModels/MainViewModel.cs`（`CommitFavoriteReorder`）、`Services/SettingsService.cs`（`MoveFavoriteToIndex`）。
 - `assets/seed/lib/` — 组件源码整份自包含，**48 个文件** = 44 个 `.cs`（含 `Internal/` 6 个）+ `StartUI4Controls.csproj` + `LICENSE.txt` + `README.md`（组件手册，随工程进 `lib/`）+ `架构审计报告-3.0.0主题机制评审.md`（主题通路的实测数据）。**自 2026-10-04 起它是自持基线**：源自仓库内三个示例工程 `lib/` 的并集，比清单 `fetchedFrom` 那份上游目录（commit `5d96442a` 的 `componentSourceCode/StartUI4Controls`，main 上已删）多 14 个文件的有意改动。文件按 LF 存。改它必须同步三个示例工程 + 重钉清单 + 回灌 `references/`（见"源码来源与升级"）。
 - `assets/seed/manifest.json` — 上述 48 条 `path + blobSha + size` 与内容计数基线（`.cs` 44 / 令牌 38 / **DP 238**），回源与校验都以它为准；`upstream.baseline` 段记着自持基线的来源、偏离清单（14 个文件）与放行条件。

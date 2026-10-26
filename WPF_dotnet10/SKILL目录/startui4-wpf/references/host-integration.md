@@ -201,6 +201,35 @@ bool isDark = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B < 128;
 
 模板自证（本机探针，900×420、内置 light、13 页、未定义 `App.Font.Size.Small` 所以页签走默认 12）：对着 51 文件种子 lib 与 demo 的 48 文件 lib 各 `dotnet build` 0 错误 / 9 警告；UIA 按 `OfficialTabs` 找到 TabControl、13 个 `TabItem`，槽高 37（Border 33 + 间隔 4）；`UI4ScrollViewer` 的 `ScrollableHeight≈99.48`、`ExtentHeight≈480.48`、`ViewportHeight=381`，`ScrollToEnd()` 后 `VerticalOffset≈99.48`，最后三页可见；渲染图中选中块底部两角为圆角。这组数只证明模板本身，宿主换字体/主题后按上面四条重新看。
 
+## UI4NavigationView 左侧导航默认壳
+
+适用：左侧图标/文字导航 + 右侧内容区，使用 `UI4NavigationView`（不是官方 `TabControl`，也不是浏览器式 `UI4Tab`）。库模板没有公开右内容面板的底色/圆角，也没有左栏的 `CornerRadius`；直接摆一个导航视图会得到直角、贴在一起的两栏、项悬浮灰底右缘被内部 ListBox 裁平。**默认实现**是 `assets/templates/cases/NavigationRailCase.xaml` + `.xaml.cs`：复制到 `app/Views/`，把 `__APPNAME__` 换成工程名，数据项与页面内容换成真实来源。
+
+布局口径（与 QuickPanel 现网一致，改动时按 4 的倍数调）：
+
+| 项 | 值 | 作用 |
+|---|---|---|
+| 左栏 ↔ 右内容 | 12 px（右内容面板 `Margin=12,0,0,0`） | 两张独立卡片 |
+| 右内容面板 | 四角 `12`、顶部 `Padding=0,20,0,0`、圆角 `Clip` | 内容不盖住圆角，标题离顶 20 |
+| 内容标题左边 | 24（= 首卡 `ItemMargin=20` + `UI4GridView` 内部 4） | 标题与首卡左缘对齐 |
+| 首卡 | `ItemMargin="20"` | 与标题的 24 口径配套 |
+| 导航项背景 | 左 4 / 右 5 / 上下 4（`PART_ItemBorder.Margin`） | 左右可见白边一致；上下对称使内容中心不动，首卡避开栏顶圆角 |
+| 导航项视口 | 内部 `UI4ListBox` 的 ScrollViewer `Padding=0` | 避免项右侧 6 px 圆角被裁 |
+| `Nav.Background` | `Transparent` | 圆角缺口与 12 px 间距露出外层渐变 |
+
+case 的 code-behind 负责这些公开 DP 表达不了的宿主补丁：`ApplyChrome` / `StyleContentPanel` / `StyleLeftRail` / `StyleListBoxViewport` / `ApplyItemMargins`。换主题时 `UI4ListBox` 的 `OnStyleRefresh` 会重建 Style/ControlTemplate，内部 ScrollViewer 的 4 px Padding 会回来，所以它在 `UI4Theme.ThemeChanged` 的 `Loaded` 与 `ApplicationIdle` 各重打一次；**不要只在启动时设一次**。项容器由 `ItemContainerGenerator.StatusChanged` 补边距，虚拟化后新生成的项也覆盖。
+
+嵌进现有窗口而不是整块使用 UserControl 时，把上面这组方法原样搬进窗口 code-behind，在窗口关闭 / 控件卸载时调用 `DisposeChrome`（取消主题订阅与尺寸处理器）；不要另写第二套数值。
+
+验收：
+
+- `dotnet build` 0 错误（全量重建时仍只有 lib 的 9 条固定警告）；不要求在改动前反复起 app 复现 UI 问题。
+- 起窗后：左栏与右内容之间看得见 12 px 间隙；右内容四角为圆角；标题左缘与首卡左缘对齐；导航项悬浮灰底左右白边一致、上下不被栏顶圆角切掉。
+- 切暗档/套装后，右内容底色、左栏 Clip、项背景边距自动保持；这一条由主题重打保证，不靠 Static 资源。
+- 真实页面替换 `NavigationRailCase` 的 `NavigationPage` 模板；`ApplyChrome` 一组方法保持不动。
+
+本机编译自证：把 case 复制进 `scaffold.ps1 -Offline` 生成的临时工程并替换 `__APPNAME__` 后，`dotnet build` **0 错误 / 9 条 lib 固定警告**；未做 UI 观感验证（按修 UI 显示问题的流程不主动起窗）。
+
 ## 对话框与托盘的宿主侧约束
 
 ```csharp
