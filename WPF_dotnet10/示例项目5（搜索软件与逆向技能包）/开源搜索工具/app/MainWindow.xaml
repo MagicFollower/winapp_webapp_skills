@@ -179,6 +179,7 @@
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Text="{Binding CountText}" Margin="8,4,8,8"
+                                       AutomationProperties.AutomationId="ResultCount"
                                        FontSize="{DynamicResource App.Font.Size.Small}"
                                        Foreground="{DynamicResource UI4.Brush.TextMuted}"
                                        TextTrimming="CharacterEllipsis"/>
@@ -349,10 +350,19 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="{Binding IndexStatusText}"
-                               FontSize="{DynamicResource App.Font.Size.Caption}"
-                               Foreground="{DynamicResource UI4.Brush.TextMuted}"
-                               TextTrimming="CharacterEllipsis"/>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBlock Text="{Binding IndexStatusText}" MaxWidth="620"
+                                   AutomationProperties.AutomationId="IndexStatus"
+                                   AutomationProperties.HelpText="{Binding IndexStateCode}"
+                                   FontSize="{DynamicResource App.Font.Size.Caption}"
+                                   Foreground="{DynamicResource UI4.Brush.TextMuted}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding LiveStatusText}" Margin="12,0,0,0" MaxWidth="380"
+                                   AutomationProperties.AutomationId="LiveStatus"
+                                   FontSize="{DynamicResource App.Font.Size.Caption}"
+                                   Foreground="{DynamicResource UI4.Brush.TextMuted}"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
                     <TextBlock Grid.Column="1" Text="{Binding SortText}" Margin="12,0"
                                FontSize="{DynamicResource App.Font.Size.Caption}"
                                Foreground="{DynamicResource UI4.Brush.TextMuted}"/>

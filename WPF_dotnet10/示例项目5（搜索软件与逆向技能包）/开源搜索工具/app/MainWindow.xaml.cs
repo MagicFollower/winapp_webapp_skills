@@ -385,6 +385,8 @@ namespace IndexApp
 
         private void MainWindow_Closing(object? sender, CancelEventArgs e)
         {
+            Vm?.Shutdown();
+
             var settings = App.Settings;
             if (settings == null) return;
 

@@ -2,7 +2,7 @@
 
 > 这份文档面向“从没碰过这个工程的人”。每条命令都给判据；所有实测输出都是本机跑出来的，未跑的行显式写“未验证 + 原因”。
 > 本次四挡（无人值守默认，未经用户确认）：明暗 `both` / 分发两档都出 / 只用内置主题档 / 齿轮入口 + 四节全给（另加“索引”节）。
-> 实现口径（M1）：目录遍历 + 快照（无需管理员）；默认索引根 = 所有就绪的固定盘（本机 C:\、D:\、E:\）；MFT/USN 服务模式为 M2，详见 `docs/adr/0001-adopt-vs-build.md`。
+> 实现口径（M2.0）：目录遍历 + 可增量快照 + `FileSystemWatcher` 实时刷新 + 启动后台目录 mtime 对账（无需管理员）；默认索引根 = 所有就绪的固定盘（本机 C:\、D:\、E:\）；MFT/USN 服务模式为 M2.1，详见 `docs/M2升级规划报告.md` 与 `docs/adr/0001-adopt-vs-build.md`。
 
 - 工程根：`C:\Users\webtu\Desktop\一份搜索软件重构项目\开源搜索工具`
 - 本次填写人／日期：自动化实施（Qoder）／2026-10-27
@@ -60,9 +60,9 @@ lib\UI4Panel.cs(21,28): warning CS1574: XML 注释中有未能解析的 cref 特
     run.cmd
     # 或：dotnet run --project app\IndexApp.csproj
 
-判据：窗口出现，标题 `IndexApp`；右上角齿轮打开设置浮层（Esc / 点遮罩 /「完成」都能关）；「配色」点深色，整窗与原生标题栏一起变，底部状态行的 `生效键` 从 `light` 变 `dark`；再点浅色回到 `light`。已知边界：下拉浮层与右键菜单不吃 `LayoutTransform`，缩放档下弹层内容仍按 100% 渲染。
+判据：窗口出现，标题 `IndexApp`；默认底部状态行为 `生效键 paper-grey`；右上角齿轮打开设置浮层（Esc / 点遮罩 /「完成」都能关）；「配色」点深色，整窗与原生标题栏一起变，底部状态行的 `生效键` 从 `paper-grey` 变 `dark`；再点浅色回到 `light`。已知边界：下拉浮层与右键菜单不吃 `LayoutTransform`，缩放档下弹层内容仍按 100% 渲染。
 
-设置落盘在 `%APPDATA%\IndexApp\settings.json`（kv1 纯文本）；索引快照在 `%LOCALAPPDATA%\IndexApp\index.bin`。默认索引根是所有就绪的固定盘；自动化可用 `INDEXAPP_ROOT` / `INDEXAPP_SNAPSHOT` 覆盖。范围按钮只接受索引中已有的目录；新建/被排除目录会提示重建。也可 `IndexApp.exe --path "D:\Apps"` 启动即限定范围。
+设置落盘在 `%APPDATA%\IndexApp\settings.json`（kv1 纯文本）；索引快照在 `%LOCALAPPDATA%\IndexApp\index.bin`。默认索引根是所有就绪的固定盘；自动化可用 `INDEXAPP_ROOT` / `INDEXAPP_SNAPSHOT` 覆盖。范围按钮只接受索引中已有的目录；新建/被排除目录会提示重建。也可 `IndexApp.exe --path "D:\Apps"` 启动即限定范围。M2.0 运行中新增/删除/重命名文件会自动进入/退出搜索结果；应用关闭期间的文件名变化由启动后台对账补齐，状态栏显示 `实时刷新：开` / `后台校验` / `启动对账`。
 
 无人值守自证（不开窗、退出码 = 失败断言数）：
 
@@ -73,9 +73,10 @@ lib\UI4Panel.cs(21,28): warning CS1574: XML 注释中有未能解析的 cref 特
 实测输出：
 
 ```text
-启动耗时（Start-Process 到 MainWindowTitle 非空，--softrender，8 条测试索引）：795 ms
+启动耗时（Start-Process 到 IndexStatus.HelpText=ready，--softrender，默认全盘快照）：1,474–1,745 ms
+后台对账完成（IndexStatus.HelpText 离开 reconciling）：2,681–3,204 ms
 selftest 退出码：0
-报告（68 PASS + 1 INFO）：
+报告（70 PASS + 1 INFO）：
 PASS  令牌总数为 38  [实际 38]
 PASS  light 全令牌可取色
 PASS  dark 全令牌可取色
@@ -88,7 +89,9 @@ PASS  IsDark 与标题栏同判据
 PASS  明暗策略已显式决策（Theme.Policy）  [当前 "both"，要求 both / light-only / dark-only]
 PASS  预置套装 × 38 令牌资源键齐全
 PASS  字典底色与 Dark() 定义同源  [字典 #FF202026 vs 定义 #FF202026]
-PASS  kv1 往返后九项设置不变  [实际 dark / Cambria / 17 / 125 / 1024x700 @ -1200,40 / True]
+PASS  默认主题为灰纸套装  [paper-grey]
+PASS  默认开启实时刷新  [True]
+PASS  kv1 往返后十项设置不变  [实际 dark / Cambria / 17 / 125 / live=False / 1024x700 @ -1200,40 / True]
 PASS  kv1 写侧键名齐全（格式是稳定契约）  [缺 ]
 PASS  往返保持值 [a=b=c]  [得到 [a=b=c]，期望 [a=b=c]]
 PASS  往返保持值 [C:\Users\me\数据]  [得到 [C:\Users\me\数据]，期望 [C:\Users\me\数据]]
@@ -162,8 +165,8 @@ INFO 字号阶梯：基准=15 → 胶囊=11 标签=12 次要=13 正文=15 提示
 
 | 档位 | 产物 | 目标机要求 | 本机实测 |
 |---|---|---|---|
-| 框架依赖 | `publish_no_runtime\IndexApp_v0.1.0_no_runtime_build_20261027112311.exe` | 必须已装 `Microsoft.WindowsDesktop.App` 10.x | `1,717,794 bytes`；发布耗时未单独计时 |
-| 自带运行时 | `publish\IndexApp_v0.1.0_self_contained_build_20261027112323.exe` | 免装 .NET | `70,317,005 bytes`；首次运行时包已缓存，耗时未单独计时 |
+| 框架依赖 | `publish_no_runtime\IndexApp_v0.2.0_no_runtime_build_20261027200103.exe` | 必须已装 `Microsoft.WindowsDesktop.App` 10.x | `1,758,754 bytes`；selftest 0；30s 空闲私有 240.3 MB |
+| 自带运行时 | `publish\IndexApp_v0.2.0_self_contained_build_20261027200113.exe` | 免装 .NET | `70,337,651 bytes`；selftest 0；30s 空闲私有 316.5 MB（超过 300MB 闸门） |
 
 判据：
 
@@ -177,15 +180,15 @@ INFO 字号阶梯：基准=15 → 胶囊=11 标签=12 次要=13 正文=15 提示
 [1/3] publish single-file, FRAMEWORK-DEPENDENT ...
 [2/3] self-test of the packaged exe ...
 selftest exit code: 0
-  publish_no_runtime\IndexApp_v0.1.0_no_runtime_build_20261027112311.exe   1717794 bytes
+  publish_no_runtime\IndexApp_v0.2.0_no_runtime_build_20261027200103.exe   1758754 bytes
 
 [1/3] publish single-file, SELF-CONTAINED ...
 [2/3] self-test of the packaged exe ...
 selftest exit code: 0
-  publish\IndexApp_v0.1.0_self_contained_build_20261027112323.exe   70317005 bytes
+  publish\IndexApp_v0.2.0_self_contained_build_20261027200113.exe   70337651 bytes
 
 MainWindowTitle 回读（自包含单文件）：IndexApp
-首次启动（含原生库解包）：890 ms；第二次未单独重测
+冷启动到首屏（自包含单文件，默认全盘快照）：1,605 ms；框架依赖：1,476 ms
 ```
 
 ---
@@ -235,7 +238,7 @@ center=Color [A=255, R=247, G=249, B=251]
 
 发版顺序：
 
-1. 改 `app\IndexApp.csproj` 的 `<Version>`（当前 `0.1.0`）。
+1. 改 `app\IndexApp.csproj` 的 `<Version>`（当前 `0.2.0`）。
 2. 重新打包要交付的那一档。
 3. 守门比对 `FileVersion`：
 
@@ -248,11 +251,13 @@ center=Color [A=255, R=247, G=249, B=251]
 实测输出：
 
 ```text
-FileVersion=0.1.0.0
-publish_no_runtime=1,717,794 bytes
-publish_self_contained=70,317,005 bytes
+FileVersion=0.2.0.0
+publish_no_runtime=1,758,754 bytes
+publish_self_contained=70,337,651 bytes
 self_contained_selftest_exit=0
-SHA256(self_contained)=FF9C0D71C46EF6C2C2E382E24050280E2BA7ECFA87896AE4E6C886ADA028BE04
+no_runtime_selftest_exit=0
+SHA256(no_runtime)=D5B6F4B534285C542A669DECF67ED544CD8816B65CEF78D5A1CD66570B0E2E87
+SHA256(self_contained)=5A366192DE3D4FD4774CC61838FC0CA95F4CB341B21C4C1AF1F1124B1C290A40
 ```
 
 目标机排查：`dotnet --list-runtimes` 有没有 WindowsDesktop 10.x（框架依赖档）→ 首次解包是否被杀软拦 → `%APPDATA%\IndexApp\selftest.txt` 有没有红。
@@ -267,17 +272,18 @@ SHA256(self_contained)=FF9C0D71C46EF6C2C2E382E24050280E2BA7ECFA87896AE4E6C886ADA
 - **明暗策略是显式决策**（`app\Helpers\Theme.cs` 的 `Theme.Policy = "both"`）。留 `TODO` 时 selftest 会红并挡住发布。
 - **界面自适应**：`MinWidth/MinHeight` 960×640（本工程）；字体走 `Segoe UI, Microsoft YaHei UI, sans-serif`；`app.manifest` 的 PerMonitorV2 别删；窗口几何恢复要做越界回正。
 - **间距刻度**：`Margin/Padding` 只用 4 的倍数；本次静态扫描输出 `(empty)`。卡片外边距要 ≥ `ShadowDepth + ShadowBlurRadius`；不要用 `ClipToBounds` 兜投影。
-- **托盘 `UI4NotifyIcon`** 必须在 `OnClosing` 里 `Visibility = Collapsed; Dispose();`（本工程 M1 未启用托盘）。
+- **托盘 `UI4NotifyIcon`** 必须在 `OnClosing` 里 `Visibility = Collapsed; Dispose();`（本工程 M2.0 仍未启用托盘）。
 - **`UI4PasswordBox.Password` 绑定要显式 `Mode=TwoWay`**；`UI4ListView/UI4GridView` 的悬浮放大是按像素预算反算钳过的。
 - **`UI4CodeEditor` 的语法高亮不跟主题**（XSHD 决定），库只染外壳底色与前景。
 - **PowerShell 侧**：`.ps1` 里有中文必须存带 BOM 的 UTF-8；脚本首句设 `[Console]::OutputEncoding = UTF8`；带中文的路径别用 `powershell -Command` 内联，走 `-File` + 参数。
 - **验证陷阱**：拿上一轮产物验本轮改动、关键命令接管道（`build | grep` 的退出码是 grep 的）、增量构建的 `0 个警告`——这三条会把“没通过”报成“通过”或反之。
-- **默认扫描范围**：所有就绪的固定盘（本机 C:\、D:\、E:\），按名字/路径排除 `WinSxS`、`Installer`、`Package Cache`、`node_modules` 等；如需收窄用 `INDEXAPP_ROOT`。范围按钮只接受已在索引中的目录，新建/被排除目录会明确提示重建。
-- **扫描不会伤硬盘**：只读文件名/大小/时间等元数据，不读文件内容、不写被扫描盘；快照写到 `%LOCALAPPDATA%`。首次全量枚举是一次性 I/O，之后加载快照；F5/重建才会再次扫描。正常读取不会损坏硬盘，频繁重建只会增加 I/O。
-- **本次 UI 冒烟实测（UIA）**：测试根 `%TEMP%\IndexAppSmoke`，索引 6 文件 / 2 目录；搜索 `hello` 得 1 条并显示文本预览；搜索 `photo` 得 1 条并显示 240×240 图片预览；清空搜索回到 8 条；“文档”分类 4 条；设置浮层可开/可关；深色/浅色切换截图均成功（`--softrender`）。截图：`docs/screenshot-indexapp.png`。
+- **默认扫描范围**：所有就绪的固定盘（本机 C:\、D:\、E:\），按名字/路径排除 `WinSxS`、`Installer`、`Package Cache`、`node_modules` 以及应用自身数据目录；如需收窄用 `INDEXAPP_ROOT`。范围按钮只接受已在索引中的目录，新建/被排除目录会明确提示重建。
+- **扫描不会伤硬盘**：只读文件名/大小/时间等元数据，不读文件内容、不写被扫描盘；快照写到 `%LOCALAPPDATA%`。首次全量枚举是一次性 I/O，之后加载快照；F5/重建才会再次全量扫描。M2.0 的实时刷新用目录变更通知，不轮询文件内容。正常读取不会损坏硬盘，频繁重建只会增加 I/O。
+- **本次 M2.0 UI 冒烟实测（UIA）**：独立测试根 `C:\Users\webtu\IndexAppM2UiTest\root`；运行中创建 `live-new.txt` → 搜索命中，状态 `实时刷新：开 · 已同步 1 项`；删除 → 搜索 0 项；关闭应用后新增/删除/重命名，重启后台对账 `新增 2 / 删除 2 / 更新 0` 并搜索一致；设置浮层实时刷新勾选 On，主题区 `灰纸套装（预置） → 生效键 paper-grey`。截图：`docs/screenshot-indexapp.png`。
 - **未验证项汇总**：
-  - MFT/USN 全量索引与服务化：本机进程非管理员（`net session` 退 2），无法验证卷句柄/USN；M1 走目录遍历 + 快照，M2 再做。
-  - 1M UI 帧间隙/滚动：引擎查询基准另见 `bench/` 与 `docs/` 台账；UI 长帧尚未接入 `CompositionTarget.Rendering` 记录。
+  - MFT/USN 全量索引与服务化：本机进程非管理员（`fsutil usn readjournal C:` 拒绝访问），无法验证卷句柄/USN；M2.0 走目录监视 + 对账，M2.1 再做。
+  - 自包含包内存闸门：30s 空闲私有 316.5 MB（同机读数 309–372 MB），超过 300 MB；框架依赖包 240.3 MB 达标。已启用 `System.GC.ConserveMemory=9` 与对账后 Compact，仍不稳定压线。
+  - 空查询 UI 延迟：76.6 万命中全量排序，201–359 ms，超过 200 ms 闸门；关键词查询达标。
   - 字号滑杆 12–28 与全局缩放 150%/200% 的逐档目测：只做了设置浮层开合与深浅主题切换；排印/缩放的机器断言已由 selftest 覆盖。
-  - 系统托盘、Explorer 右键菜单、颜色标签、自动更新、内容检索、多用户 ACL、MSI 安装器、代码签名：M1 未实现或未验证。
+  - 系统托盘、Explorer 右键菜单、颜色标签、自动更新、内容检索、多用户 ACL、MSI 安装器、代码签名：M2.0 未实现或未验证。
   - 自包含包首次运行时包下载耗时：本机 NuGet/运行时包已缓存，未单独计时。

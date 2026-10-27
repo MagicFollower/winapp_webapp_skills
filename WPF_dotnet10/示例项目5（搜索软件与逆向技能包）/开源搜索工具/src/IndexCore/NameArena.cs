@@ -20,6 +20,7 @@ internal sealed class NameArena
 
     public int Length { get; private set; }
     public byte[] Buffer => _buffer;
+    public int Capacity => _buffer.Length;
 
     public int Add(string value, out int length)
     {
@@ -38,6 +39,23 @@ internal sealed class NameArena
         return offset;
     }
 
+    /// <summary>压缩索引时直接搬 UTF-8 字节，避免为 1M 个旧名称再造 1M 个临时 string。</summary>
+    public int Add(ReadOnlySpan<byte> utf8, out int length)
+    {
+        if (utf8.IsEmpty)
+        {
+            length = 0;
+            return Length;
+        }
+
+        Ensure(utf8.Length);
+        utf8.CopyTo(_buffer.AsSpan(Length));
+        int offset = Length;
+        Length += utf8.Length;
+        length = utf8.Length;
+        return offset;
+    }
+
     public ReadOnlySpan<byte> Get(int offset, int length)
     {
         if (offset < 0 || length <= 0 || offset + length > Length) return ReadOnlySpan<byte>.Empty;
@@ -50,13 +68,26 @@ internal sealed class NameArena
         return span.IsEmpty ? string.Empty : Encoding.UTF8.GetString(span);
     }
 
+    public void Trim()
+    {
+        int target = Math.Max(16, Length);
+        if (_buffer.Length <= target + 1024 * 1024) return;
+        Array.Resize(ref _buffer, target);
+    }
+
     private void Ensure(int extra)
     {
         int required = Length + extra;
         if (required <= _buffer.Length) return;
 
-        int size = _buffer.Length;
-        while (size < required) size = size <= int.MaxValue / 2 ? size * 2 : required;
+        // 与 FileIndex 的条目数组同口径：25% 增长，避免增量写一条名称就把 arena 整块翻倍。
+        int size = _buffer.Length == 0 ? 16 : _buffer.Length + Math.Max(4096, _buffer.Length / 4);
+        while (size < required)
+        {
+            int grow = Math.Max(4096, size / 4);
+            if (size > int.MaxValue - grow) { size = required; break; }
+            size += grow;
+        }
         Array.Resize(ref _buffer, size);
     }
 }

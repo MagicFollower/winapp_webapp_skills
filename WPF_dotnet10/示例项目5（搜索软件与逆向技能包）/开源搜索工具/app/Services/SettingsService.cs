@@ -22,6 +22,8 @@ namespace IndexApp.Services
         public double BaseFontSize { get; set; }
         /// <summary>全局缩放百分比，50–200。</summary>
         public double ZoomPercent { get; set; }
+        /// <summary>运行期通过目录监视自动跟进文件变化；关闭后回到 F5 重建的 M1 行为。</summary>
+        public bool LiveRefresh { get; set; }
 
         public double WindowWidth { get; set; }
         public double WindowHeight { get; set; }
@@ -128,6 +130,7 @@ namespace IndexApp.Services
             entries.Add(Pair("fontFamilyName", FontFamilyName));
             entries.Add(Pair("baseFontSize", BaseFontSize.ToString(ci)));
             entries.Add(Pair("zoomPercent", ZoomPercent.ToString(ci)));
+            entries.Add(Pair("liveRefresh", LiveRefresh ? "true" : "false"));
             entries.Add(Pair("windowWidth", WindowWidth.ToString(ci)));
             entries.Add(Pair("windowHeight", WindowHeight.ToString(ci)));
             entries.Add(Pair("windowLeft", WindowLeft.ToString(ci)));
@@ -154,6 +157,11 @@ namespace IndexApp.Services
                 double.TryParse(value, NumberStyles.Float, ci, out number))
                 ZoomPercent = Helpers.Typography.ClampZoom(number);
 
+            // 旧设置文件没有这个键：保留 ApplyDefaults 的 true，不把缺键当 false。
+            bool flag;
+            if (map.TryGetValue("liveRefresh", out value) && bool.TryParse(value, out flag))
+                LiveRefresh = flag;
+
             // 字号与缩放一律钳回区间：设置文件是用户能自己开编辑器改的，
             // 500% 或 4 px 这种值不能让界面直接吃下去；解析不了的保留已生效值不覆盖
             if (map.TryGetValue("windowWidth", out value) && TrySize(value, ci, out number)) WindowWidth = number;
@@ -161,7 +169,6 @@ namespace IndexApp.Services
             if (map.TryGetValue("windowLeft", out value) && TryOffset(value, ci, out number)) WindowLeft = number;
             if (map.TryGetValue("windowTop", out value) && TryOffset(value, ci, out number)) WindowTop = number;
 
-            bool flag;
             if (map.TryGetValue("windowMaximized", out value) && bool.TryParse(value, out flag))
                 WindowMaximized = flag;
         }
@@ -185,10 +192,11 @@ namespace IndexApp.Services
 
         private void ApplyDefaults()
         {
-            ThemeKey = "light";
+            ThemeKey = "paper-grey";
             FontFamilyName = string.Empty;
             BaseFontSize = Helpers.Typography.DefaultBaseSize;
             ZoomPercent = Helpers.Typography.DefaultZoomPercent;
+            LiveRefresh = true;
             WindowWidth = 1280;
             WindowHeight = 780;
             WindowLeft = double.NaN;

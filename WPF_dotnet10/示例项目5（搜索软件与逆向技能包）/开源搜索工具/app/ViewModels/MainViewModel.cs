@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -43,6 +44,12 @@ namespace IndexApp.ViewModels
         private CancellationTokenSource? _searchCts;
         private CancellationTokenSource? _previewCts;
         private CancellationTokenSource? _indexCts;
+        private CancellationTokenSource? _reconcileCts;
+        private IndexWatcher? _watcher;
+        private DispatcherTimer? _liveRefreshDebounce;
+        private long _liveAppliedCount;
+        private bool _dirtySinceSave;
+        private bool _shuttingDown;
         private bool _initialized;
         private bool _isIndexing;
 
@@ -59,6 +66,16 @@ namespace IndexApp.ViewModels
             {
                 _searchDebounce.Stop();
                 _ = RunSearchAsync();
+            };
+
+            _liveRefreshDebounce = new DispatcherTimer(DispatcherPriority.Background, _dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(450)
+            };
+            _liveRefreshDebounce.Tick += (_, _) =>
+            {
+                _liveRefreshDebounce.Stop();
+                if (!_shuttingDown && !IsIndexing) _ = RunSearchAsync();
             };
 
             ThemeChoices = ThemeService.AvailableKeys()
@@ -217,6 +234,41 @@ namespace IndexApp.ViewModels
             private set { SetProperty(ref _indexStatusText, value); }
         }
 
+        private string _liveStatusText = "实时刷新：准备中";
+        public string LiveStatusText
+        {
+            get { return _liveStatusText; }
+            private set { SetProperty(ref _liveStatusText, value); }
+        }
+
+        private string _indexStateCode = "loading";
+        /// <summary>给自动化验收用的 ASCII 状态码；界面文案会变，这个不能跟着变。</summary>
+        public string IndexStateCode
+        {
+            get { return _indexStateCode; }
+            private set { SetProperty(ref _indexStateCode, value); }
+        }
+
+        public bool LiveRefresh
+        {
+            get { return _settings.LiveRefresh; }
+            set
+            {
+                if (_settings.LiveRefresh == value) return;
+                _settings.LiveRefresh = value;
+                _settings.Save();
+                RaisePropertyChanged();
+
+                if (_shuttingDown) return;
+                if (value) StartWatcher();
+                else
+                {
+                    StopWatcher("实时刷新：已关闭");
+                    IndexStateCode = "off";
+                }
+            }
+        }
+
         public bool IsIndexing
         {
             get { return _isIndexing; }
@@ -279,23 +331,32 @@ namespace IndexApp.ViewModels
         public async Task RefreshIndexAsync()
         {
             if (IsIndexing) return;
+            _reconcileCts?.Cancel();
             await BuildIndexAsync().ConfigureAwait(true);
         }
 
         private async Task LoadOrBuildAsync()
         {
             IsIndexing = true;
+            IndexStateCode = "loading";
             IndexStatusText = "正在加载索引…";
+            LiveStatusText = "实时刷新：准备中";
 
             string snapshot = SnapshotPath;
-            var loaded = await Task.Run(() => FileIndex.Load(snapshot)).ConfigureAwait(true);
+            var options = BuildOptions();
+            var loaded = await Task.Run(() => FileIndex.Load(snapshot, options)).ConfigureAwait(true);
             if (loaded != null && RootsMatch(loaded))
             {
                 _index = loaded;
+                _liveAppliedCount = 0;
+                _dirtySinceSave = false;
                 IsIndexing = false;
-                IndexStatusText = "已加载快照：" + loaded.FileCount.ToString("N0") + " 文件 / "
-                    + loaded.DirectoryCount.ToString("N0") + " 目录";
+                IndexStatusText = StatusFor(loaded);
+
+                StartWatcher();
+                IndexStateCode = "ready";
                 await RunSearchAsync().ConfigureAwait(true);
+                StartBackgroundReconcile(loaded);
                 return;
             }
 
@@ -305,9 +366,12 @@ namespace IndexApp.ViewModels
         private async Task BuildIndexAsync()
         {
             IsIndexing = true;
+            IndexStateCode = "building";
             Rows = null;
             CountText = "";
             IndexStatusText = "正在扫描目录…";
+            StopWatcher("实时刷新：重建中");
+            _reconcileCts?.Cancel();
             _indexCts?.Cancel();
             _indexCts = new CancellationTokenSource();
             var ct = _indexCts.Token;
@@ -329,10 +393,15 @@ namespace IndexApp.ViewModels
                 }, ct).ConfigureAwait(true);
 
                 _index = index;
+                _liveAppliedCount = 0;
+                _dirtySinceSave = false;
                 IsIndexing = false;
-                IndexStatusText = "索引就绪：" + index.FileCount.ToString("N0") + " 文件 / "
-                    + index.DirectoryCount.ToString("N0") + " 目录";
+                IndexStatusText = StatusFor(index);
+
+                StartWatcher();
+                IndexStateCode = "ready";
                 await RunSearchAsync().ConfigureAwait(true);
+                StartBackgroundReconcile(index);
             }
             catch (OperationCanceledException)
             {
@@ -342,9 +411,220 @@ namespace IndexApp.ViewModels
             catch (Exception ex)
             {
                 IsIndexing = false;
+                IndexStateCode = "failed";
                 IndexStatusText = "索引失败：" + ex.Message;
                 StatusMessage = "索引失败：" + ex.Message;
+                if (_index != null) StartWatcher();
             }
+        }
+
+        /// <summary>
+        /// 后台分块对账：先让窗口和旧快照结果可用，再逐步补齐关闭期间的文件名变化。
+        /// 全盘 11 万目录一次 stat 要 5 秒，放在冷启动关键路径上会直接把 3s 闸门打爆。
+        /// </summary>
+        private void StartBackgroundReconcile(FileIndex index)
+        {
+            _reconcileCts?.Cancel();
+            _reconcileCts = new CancellationTokenSource();
+            var ct = _reconcileCts.Token;
+            IndexStateCode = "reconciling";
+            var progress = new Progress<IndexProgress>(p =>
+            {
+                if (!_shuttingDown)
+                    LiveStatusText = "后台校验：" + p.Directories.ToString("N0") + " 目录 · " + p.Phase;
+            });
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    ReconcileResult result = await Task.Run(() => index.Reconcile(progress, ct), ct).ConfigureAwait(false);
+                    if (ct.IsCancellationRequested || _shuttingDown) return;
+
+                    await Task.Run(() =>
+                    {
+                        index.TrimCapacity();
+                        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+                        GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+                        GC.WaitForPendingFinalizers();
+                        GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+                    }, CancellationToken.None).ConfigureAwait(false);
+
+                    if (ct.IsCancellationRequested || _shuttingDown) return;
+
+                    await _dispatcher.InvokeAsync(() =>
+                    {
+                        if (_shuttingDown) return;
+                        if (result.HasChanges)
+                        {
+                            _dirtySinceSave = true;
+                            _liveAppliedCount += result.Added + result.Removed + result.Updated;
+                            string prefix = _watcher != null && _watcher.WatcherCount > 0 ? "实时刷新：开" : "实时刷新";
+                            LiveStatusText = prefix + " · 启动对账 新增 " + result.Added.ToString("N0")
+                                + " / 删除 " + result.Removed.ToString("N0")
+                                + " / 更新 " + result.Updated.ToString("N0");
+                            _ = RunSearchAsync();
+                        }
+                        SetWatcherStateCode();
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    await _dispatcher.InvokeAsync(() => StatusMessage = "启动对账失败：" + ex.Message);
+                }
+            }, ct);
+        }
+
+        private string StatusFor(FileIndex index)
+        {
+            return "索引就绪：" + index.FileCount.ToString("N0") + " 文件 / "
+                + index.DirectoryCount.ToString("N0") + " 目录";
+        }
+
+        private void StartWatcher()
+        {
+            StopWatcher();
+            var index = _index;
+            if (index == null) return;
+
+            if (!_settings.LiveRefresh)
+            {
+                LiveStatusText = "实时刷新：已关闭";
+                IndexStateCode = "off";
+                return;
+            }
+
+            try
+            {
+                var watcher = new IndexWatcher(index, index.Roots, 500);
+                watcher.Changed += OnWatcherChanged;
+                watcher.Faulted += OnWatcherFaulted;
+                _watcher = watcher;
+                watcher.Start();
+                SetWatcherStateCode();
+            }
+            catch (Exception ex)
+            {
+                LiveStatusText = "实时刷新：启动失败";
+                IndexStateCode = "failed";
+                StatusMessage = "实时刷新启动失败：" + ex.Message;
+            }
+        }
+
+        private void SetWatcherStateCode()
+        {
+            if (!_settings.LiveRefresh)
+            {
+                LiveStatusText = "实时刷新：已关闭";
+                IndexStateCode = "off";
+                return;
+            }
+
+            var watcher = _watcher;
+            if (watcher == null || watcher.WatcherCount == 0)
+            {
+                LiveStatusText = "实时刷新：不可用（没有可监视的索引根）";
+                IndexStateCode = "failed";
+                return;
+            }
+
+            if (watcher.Overflowed)
+            {
+                LiveStatusText = "实时刷新：溢出，请按 F5 重建";
+                IndexStateCode = "overflow";
+                return;
+            }
+
+            if (_liveAppliedCount > 0)
+                LiveStatusText = "实时刷新：开 · 已同步 " + _liveAppliedCount.ToString("N0") + " 项";
+            else
+                LiveStatusText = "实时刷新：开（" + watcher.WatcherCount.ToString("N0") + " 个根）";
+            IndexStateCode = "live";
+        }
+
+        private void StopWatcher(string? reason = null)
+        {
+            var watcher = _watcher;
+            _watcher = null;
+            if (watcher != null)
+            {
+                watcher.Changed -= OnWatcherChanged;
+                watcher.Faulted -= OnWatcherFaulted;
+                try { watcher.Dispose(); }
+                catch { }
+            }
+
+            if (reason != null) LiveStatusText = reason;
+        }
+
+        private void OnWatcherChanged(object? sender, IndexChangedEventArgs e)
+        {
+            if (_shuttingDown) return;
+            if (!_dispatcher.CheckAccess())
+            {
+                _dispatcher.BeginInvoke(new Action(() => OnWatcherChanged(sender, e)));
+                return;
+            }
+
+            _dirtySinceSave = true;
+            _liveAppliedCount += e.AppliedCount;
+            LiveStatusText = "实时刷新：开 · 已同步 " + _liveAppliedCount.ToString("N0") + " 项";
+            IndexStateCode = "live";
+            _liveRefreshDebounce?.Stop();
+            _liveRefreshDebounce?.Start();
+        }
+
+        private void OnWatcherFaulted(Exception ex)
+        {
+            if (_shuttingDown) return;
+            if (!_dispatcher.CheckAccess())
+            {
+                _dispatcher.BeginInvoke(new Action(() => OnWatcherFaulted(ex)));
+                return;
+            }
+
+            bool overflow = ex.Message.Contains("溢出", StringComparison.Ordinal);
+            LiveStatusText = overflow ? "实时刷新：溢出，请按 F5 重建" : "实时刷新：降级";
+            IndexStateCode = overflow ? "overflow" : "failed";
+            StatusMessage = ex.Message;
+        }
+
+        /// <summary>窗口关闭时停监视、取消后台任务，并把运行期间的增量落盘（无变更不写）。</summary>
+        public void Shutdown()
+        {
+            if (_shuttingDown) return;
+            _shuttingDown = true;
+
+            _searchDebounce.Stop();
+            _liveRefreshDebounce?.Stop();
+            _indexCts?.Cancel();
+            _reconcileCts?.Cancel();
+            _searchCts?.Cancel();
+            _previewCts?.Cancel();
+
+            var watcher = _watcher;
+            StopWatcher();
+            if (watcher != null && watcher.AppliedChangeCount > 0) _dirtySinceSave = true;
+
+            var index = _index;
+            if (index != null && _dirtySinceSave)
+            {
+                try
+                {
+                    index.Save(SnapshotPath);
+                    _dirtySinceSave = false;
+                }
+                catch (Exception ex)
+                {
+                    StatusMessage = "索引保存失败：" + ex.Message;
+                }
+            }
+
+            _settings.Save();
+            IndexStateCode = "stopped";
         }
 
         private IndexOptions BuildOptions()
@@ -383,6 +663,12 @@ namespace IndexApp.ViewModels
 
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+            // 自身数据目录必须排除：否则快照/日志每次写入都会变成 watcher 事件，形成“自己监视自己”的反馈。
+            AddExclude(options, Path.Combine(localAppData, "IndexApp"));
+            AddExclude(options, Path.Combine(appData, "IndexApp"));
+            AddExclude(options, SnapshotPath);
+
             options.ExcludedPaths.Add(Path.Combine(localAppData, "Temp"));
             options.ExcludedPaths.Add(Path.Combine(localAppData, "Microsoft", "Edge"));
             options.ExcludedPaths.Add(Path.Combine(localAppData, "Packages"));
@@ -413,6 +699,11 @@ namespace IndexApp.ViewModels
 
             options.MaxEntries = 4_000_000;
             return options;
+        }
+
+        private static void AddExclude(IndexOptions options, string? path)
+        {
+            if (!string.IsNullOrWhiteSpace(path)) options.ExcludedPaths.Add(path);
         }
 
         private static string SnapshotPath
@@ -770,6 +1061,7 @@ namespace IndexApp.ViewModels
         {
             string trimmed = (key ?? string.Empty).Trim();
             if (trimmed.Length > 0 && ThemeService.IsAllowed(trimmed)) return trimmed;
+            if (ThemeService.IsAllowed(ThemeService.PaperGrey)) return ThemeService.PaperGrey;
             var allowed = ThemeService.AvailableKeys();
             return allowed.Count > 0 ? allowed[0] : ThemeService.Light;
         }

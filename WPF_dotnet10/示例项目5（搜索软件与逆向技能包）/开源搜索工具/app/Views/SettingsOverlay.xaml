@@ -82,7 +82,12 @@
                           GradientEnd="{DynamicResource UI4.Color.OffBackground}"
                           HoverBackground="{DynamicResource UI4.Brush.AccentDark}"
                           Click="RebuildIndex_Click"/>
-            <TextBlock Text="默认索引所有就绪的固定盘（如 C:\、D:\）；只读取文件名/大小/时间等元数据，不读取文件内容、不写被扫描的盘。首次全盘索引会有一次磁盘 I/O，之后加载快照。"
+            <ui:UI4CheckBox Content="实时刷新（自动跟进文件变化）" IsChecked="{Binding LiveRefresh}"
+                            Margin="0,0,0,4" FontSize="{DynamicResource App.Font.Size.Small}"/>
+            <TextBlock Text="{Binding LiveStatusText}" Foreground="{DynamicResource UI4.Brush.TextMuted}"
+                       TextWrapping="Wrap" FontSize="{DynamicResource App.Font.Size.Caption}"
+                       Margin="0,0,0,8"/>
+            <TextBlock Text="默认索引所有就绪的固定盘（如 C:\、D:\）；只读取文件名/大小/时间等元数据，不读取文件内容、不写被扫描的盘。运行中通过目录监视自动更新；关闭期间的文件名变化在下次启动时对账；文件内容变化导致的大小/时间可能滞后，按 F5 可全量重建。"
                        Foreground="{DynamicResource UI4.Brush.TextMuted}" TextWrapping="Wrap"
                        FontSize="{DynamicResource App.Font.Size.Caption}" Margin="0,0,0,16"/>
 

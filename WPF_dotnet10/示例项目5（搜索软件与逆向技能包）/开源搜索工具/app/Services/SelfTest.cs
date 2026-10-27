@@ -113,13 +113,19 @@ namespace IndexApp.Services
         {
             int failed = 0;
 
-            // 九项各给互不相同的哨兵值：任何一侧键名打错，就有一项在往返后保持默认值而被抓出来
+            // 默认值也是契约：主题默认灰纸、实时刷新默认开启；新装用户不该先看到浅色/静态索引。
+            var defaults = new SettingsService();
+            failed += Check(report, "默认主题为灰纸套装", defaults.ThemeKey == "paper-grey", defaults.ThemeKey);
+            failed += Check(report, "默认开启实时刷新", defaults.LiveRefresh, defaults.LiveRefresh.ToString());
+
+            // 十项各给互不相同的哨兵值：任何一侧键名打错，就有一项在往返后保持默认值而被抓出来
             var src = new SettingsService
             {
                 ThemeKey = "dark",
                 FontFamilyName = "Cambria",
                 BaseFontSize = 17,
                 ZoomPercent = 125,
+                LiveRefresh = false,
                 WindowWidth = 1024,
                 WindowHeight = 700,
                 WindowLeft = -1200,
@@ -128,20 +134,22 @@ namespace IndexApp.Services
             };
             var back = new SettingsService();
             back.ApplyMap(SettingsCodec.Parse(SettingsCodec.Serialize(src.ToMap())));
-            failed += Check(report, "kv1 往返后九项设置不变",
+            failed += Check(report, "kv1 往返后十项设置不变",
                 back.ThemeKey == "dark" && back.FontFamilyName == "Cambria"
                 && Math.Abs(back.BaseFontSize - 17) < 1e-9 && Math.Abs(back.ZoomPercent - 125) < 1e-9
+                && !back.LiveRefresh
                 && Math.Abs(back.WindowWidth - 1024) < 1e-9 && Math.Abs(back.WindowHeight - 700) < 1e-9
                 && Math.Abs(back.WindowLeft + 1200) < 1e-9 && Math.Abs(back.WindowTop - 40) < 1e-9
                 && back.WindowMaximized,
                 "实际 " + back.ThemeKey + " / " + back.FontFamilyName + " / " + back.BaseFontSize
-                + " / " + back.ZoomPercent + " / " + back.WindowWidth + "x" + back.WindowHeight
+                + " / " + back.ZoomPercent + " / live=" + back.LiveRefresh
+                + " / " + back.WindowWidth + "x" + back.WindowHeight
                 + " @ " + back.WindowLeft + "," + back.WindowTop + " / " + back.WindowMaximized);
 
             // 写侧键名点名：这些名字就是磁盘格式的一部分，改了就是换格式（老设置会静默失效）
             var expectedKeys = new[]
             {
-                "format", "themeKey", "fontFamilyName", "baseFontSize", "zoomPercent",
+                "format", "themeKey", "fontFamilyName", "baseFontSize", "zoomPercent", "liveRefresh",
                 "windowWidth", "windowHeight", "windowLeft", "windowTop", "windowMaximized"
             };
             var written = new List<string>();

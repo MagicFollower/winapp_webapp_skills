@@ -107,6 +107,56 @@ public sealed class SearchResult
     public bool ScopeMissing { get; init; }
 }
 
+public enum FileChangeKind
+{
+    Created = 0,
+    Changed,
+    Deleted,
+    Renamed
+}
+
+/// <summary>watcher/对账层交给 FileIndex 的最小变更单元。Renamed 用 Path 表示新路径、OldPath 表示旧路径。</summary>
+public sealed class FileChange
+{
+    public FileChangeKind Kind { get; init; }
+    public string Path { get; init; } = "";
+    public string? OldPath { get; init; }
+
+    public static FileChange Created(string path) => new() { Kind = FileChangeKind.Created, Path = path };
+    public static FileChange Changed(string path) => new() { Kind = FileChangeKind.Changed, Path = path };
+    public static FileChange Deleted(string path) => new() { Kind = FileChangeKind.Deleted, Path = path };
+    public static FileChange Renamed(string oldPath, string newPath) => new()
+    {
+        Kind = FileChangeKind.Renamed,
+        Path = newPath,
+        OldPath = oldPath
+    };
+}
+
+/// <summary>目录直接子项的快照；对账时用来和索引里的子项比较。用 struct 是为了在扫描大目录时不产生百万级临时对象。</summary>
+public readonly struct DirectoryChildInfo
+{
+    public string Name { get; init; }
+    public string FullPath { get; init; }
+    public bool IsDirectory { get; init; }
+    public long Length { get; init; }
+    public long ModifiedUtcTicks { get; init; }
+    public FileAttributes Attributes { get; init; }
+}
+
+public sealed class ReconcileResult
+{
+    public int DirectoriesChecked { get; init; }
+    public int DirectoriesChanged { get; init; }
+    public int Added { get; init; }
+    public int Removed { get; init; }
+    public int Updated { get; init; }
+    public long ElapsedMs { get; init; }
+    public IReadOnlyList<string> ChangedPaths { get; init; } = Array.Empty<string>();
+
+    public bool HasChanges => Added + Removed + Updated > 0;
+}
+
 public sealed class FileRow
 {
     public int EntryIndex { get; init; }

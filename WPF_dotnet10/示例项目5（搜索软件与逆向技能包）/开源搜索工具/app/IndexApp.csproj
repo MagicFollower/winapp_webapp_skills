@@ -10,7 +10,7 @@
     <AssemblyName>IndexApp</AssemblyName>
     <!-- 版本号是发布守门的比对基准：exe 的 VersionInfo.FileVersion 由它派生（0.1.0 → 0.1.0.0）。
          发版流程 = 改这里 → 重新打包 → 比对产物 FileVersion，不一致就是拿旧构建在交付。 -->
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <!-- net10 的 WPF 仍按清单取 DPI 感知级别，PerMonitorV2 声明照旧生效 -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- ApplicationIcon 管 exe 文件本身的图标（烤进 apphost 的 RT_GROUP_ICON）；
@@ -21,6 +21,12 @@
 
   <ItemGroup>
     <Resource Include="AppIcon.ico" />
+  </ItemGroup>
+
+  <!-- M2 的启动对账会制造大量短命目录对象；ConserveMemory 让 GC 更积极地把空闲段还给系统。
+       代价是 GC 次数变多，用 1M 查询 P95 回归来确认没有把 200ms 闸门拖穿。 -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="9" Trim="false" />
   </ItemGroup>
 
   <!-- 发布开关只在真正 publish 单文件时生效：dotnet build 因此保持轻量，
