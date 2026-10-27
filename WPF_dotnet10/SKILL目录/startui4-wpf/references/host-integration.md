@@ -265,3 +265,137 @@ if (picked.HasValue) UI4Theme.SetAccent(picked.Value);
 图标文件本身默认由 `scripts/make-icon.ps1` **本地生成**（不联网）：16×16 逻辑网格上画应用名首字母的 5×7 点阵，格点按整数倍放大成方块（像素风，无抗锯齿），四角各削 2 格成圆角，底色 `#4F6BE8` / 字形 `#F7F9FB`（与 `Theme.Accent`、`Theme.LightBackground` 同值，改配色时两处一起想）。帧表固定 16/24/32/48/64/128/256：小于 256 的帧是 32bpp BGRA DIB（`biHeight = 2*size`，AND 掩码按 `alpha==0` 置 1，让只认掩码的旧渲染器也当透明），256 帧是内嵌 PNG。写完它自己回读一遍：目录条目必须连续无缝、末帧长度正好落到文件尾、`ExtractAssociatedIcon` 语义下 16/32 两档圆角 `alpha=0`——所以"半截 ico"不会静默交付。
 
 外部图（例如 `selfhst/icons` 的 `ico/` 现成多尺寸 ico，CDN 直链 `https://cdn.jsdelivr.net/gh/selfhst/icons@main/ico/<ref>.ico`）走"直接覆盖 `app/AppIcon.ico`"这条路即可，csproj 不用动；那份仓库是 CC-BY-4.0，**用了要在 `doc/` 第 5 节记来源、ref、许可与是否改过**。判可达性要真 GET 拿字节数（HEAD 200 证不住下载）。
+
+## 窗口关闭：两段式 + 退场动画（完整代码）
+
+> 症状是「点关闭后窗口僵住半秒才消失，而且没有动画」。两件事同一根因：`Closing` 里在 UI 线程同步做慢活（写快照 / 排空事件队列 / `Dispose` 需要等锁的对象），窗口线程被占住就没有帧可画；而 WPF 在 `Closing` 返回且未 `Cancel` 的那一刻销毁 HWND，动画没有载体。**只搬慢活不加动画 = 仍然瞬间消失；只加动画不搬慢活 = 动画跑到一半冻住。**
+> 下面的代码取自本机一份已发布并量过时序的工程（关闭时要写 65 MB 快照，2026-10-27 实测），落盘负担换成"写设置 / 刷缓冲 / 关连接"同样成立。**注意这份代码是泛化改写**（`_pendingWatcherDispose`→`_pendingDispose`、`IsIndexing`→`IsBusy` 一类改名）：源工程 `0 个错误` 通过并有上面那组时序读数，**这份泛化文本本身没单独编译过**（未验证，原因：本轮只沉淀文档，未起探针工程）——抄进目标工程后门禁仍是 `dotnet build` → `0 个错误`。
+
+**1）视图模型侧拆两段。** 第一段只跑 UI 线程、必须快：停定时器、取消后台 `CancellationTokenSource`、把要释放的对象**摘走引用但不 Dispose**。
+
+```csharp
+private IDisposable? _pendingDispose;      // 摘下来、留给第二段去 Dispose 的对象
+private bool _shuttingDown;
+
+public void BeginShutdown()
+{
+    if (_shuttingDown) return;
+    _shuttingDown = true;
+    _debounce?.Stop();                     // 一切定时器
+    _workCts?.Cancel();                    // 一切后台任务的取消令牌
+    _pendingDispose = StopWorker();        // StopWorker 只摘引用，不在这里等锁
+}
+
+/// 第二段：后台线程。返回"是否真的做了那件慢事"，没做时窗口不必为它多等。
+public Task<bool> FinishShutdownAsync() => Task.Run(() =>
+{
+    try { _pendingDispose?.Dispose(); } catch { }
+    _pendingDispose = null;
+    if (!_dirtySinceSave) return false;
+    try { Save(); _dirtySinceSave = false; return true; }
+    catch { return false; }                // 失败要报到状态栏，但不得让关闭流程抛
+});
+```
+
+`FileSystemWatcher.Dispose()`、要拿独占锁的 `Save()`、任何 `lock` 后可能排空队列的释放，都只能出现在第二段。
+
+**2）XAML：根 Grid 加 `RenderTransform` + 一层退场遮罩。** 遮罩住在根 Grid **内部**，所以淡出会连它一起收掉，不会留一块不透明的板。
+
+```xml
+<Grid x:Name="RootGrid" RenderTransformOrigin="0.5,0.5">
+    <Grid.LayoutTransform>                                    <!-- Step 7 的全局缩放 -->
+        <ScaleTransform ScaleX="{Binding ZoomFactor}" ScaleY="{Binding ZoomFactor}"/>
+    </Grid.LayoutTransform>
+    <Grid.RenderTransform>                                    <!-- 退场用另一槽，两者可叠 -->
+        <ScaleTransform x:Name="RootScale"/>
+    </Grid.RenderTransform>
+
+    <!-- …页面内容… -->
+
+    <Grid x:Name="ClosingOverlay" Panel.ZIndex="120" Visibility="Collapsed"
+          Background="{DynamicResource UI4.Brush.Background}">
+        <TextBlock x:Name="ClosingStatusText" Text="正在保存…"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   FontSize="{DynamicResource App.Font.Size.Medium}"
+                   Foreground="{DynamicResource UI4.Brush.TextMuted}"/>
+    </Grid>
+</Grid>
+```
+
+**3）`Closing` 三态 + 动画。** 第一次进入一律拦下；`_ = …` 不能 `await`（在 `Closing` 里等就变回同步）。
+
+```csharp
+private bool _closeStarted;
+private Task<bool>? _saveTask;
+
+private void MainWindow_Closing(object? sender, CancelEventArgs e)
+{
+    if (!_closeStarted)
+    {
+        _closeStarted = true;
+        e.Cancel = true;                       // 此刻 HWND 还活着，动画才有载体
+        var vm = Vm;
+        vm?.BeginShutdown();
+        _ = CloseWithAnimationAsync(vm);
+        return;
+    }
+    e.Cancel = false;                          // 第二次放行；这里只许写"必须 UI 线程"的小活（存窗口几何）
+    SaveWindowGeometry();
+}
+
+private async Task CloseWithAnimationAsync(MainViewModel? vm)
+{
+    if (vm != null && vm.IsBusy)               // 后台任务正在跑：先给它一个取消的机会，别和退出抢锁
+    {
+        ClosingStatusText.Text = "正在取消后台任务…";
+        ClosingOverlay.Visibility = Visibility.Visible;
+        await Task.Delay(250);
+    }
+
+    ClosingStatusText.Text = "正在保存…";
+    ClosingOverlay.Visibility = Visibility.Visible;
+    if (vm != null) _saveTask = vm.FinishShutdownAsync();   // 先起后台再播动画：动画时长就是它的工作时长
+
+    var d = TimeSpan.FromMilliseconds(170);
+    var ease = new QuadraticEase { EasingMode = EasingMode.EaseIn };
+    RootGrid.BeginAnimation(OpacityProperty, new DoubleAnimation(1d, 0d, d) { EasingFunction = ease });
+    RootScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1d, 0.975d, d) { EasingFunction = ease });
+    RootScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1d, 0.975d, d) { EasingFunction = ease });
+
+    await Task.Delay(200);                     // 必须 > 动画时长；把 Close() 提前 = "动画跑到一半突然消失"
+    Close();                                   // 再进一次 Closing，这次 _closeStarted 已为真 → 放行
+}
+```
+
+**4）`Closed` 有上限地等。** 上限必须在 `Closed` 而不是 `Closing`：窗口这时已经不可见，用户不会感到卡顿，但进程不能因为后台任务挂死而留下一个无窗口的活进程。
+
+```csharp
+private void MainWindow_Closed(object? sender, EventArgs e)
+{
+    // 全局退订都在这里：静态/主题事件、CompositionTarget.Rendering、WndProc hook、热键
+    UI4Theme.ThemeChanged -= OnThemeChanged;
+    if (_saveTask != null)
+    {
+        try
+        {
+            if (!_saveTask.Wait(TimeSpan.FromMilliseconds(1200)) && !_saveTask.IsCompleted)
+                Environment.Exit(0);
+        }
+        catch (AggregateException) { }          // 第二段自己会把异常降级成返回值，这里不该有异常
+    }
+}
+```
+
+**配套硬约束：落盘必须是"写 `.tmp` → 覆盖目标"的替换**（模板 `SettingsService.Save()` 就是这个写法：`WriteAllText(tmp)` → `Copy(tmp, 目标, true)` → 删 tmp）。`Environment.Exit(0)` 只会丢掉这一次保存，不会留下半份文件——否则这条等待上限就是在制造数据损坏。
+
+**参数与理由**（改了要重新量时序）
+
+| 参数 | 值 | 依据 |
+| --- | --- | --- |
+| 动画时长 | 170 ms `QuadraticEase(EaseIn)` | **实测**（就是下面判据那组读数用的值）；短于"用户以为没点到"的经验阈值 ~300 ms，又够读出一段收拢 |
+| 缩放终值 | **0.975**，不是 0.8/0 | **取舍，未做对照实验**：大幅缩放会露出桌面、与 DWM 原生关闭表现打架，读起来像"窗口被弹走"。0.975 是现网值，观感属目测项 |
+| 淡出 + 缩放同挂 | 是 | **取舍，未拆开各测一档**：只淡出怕读成"直接没了"，只缩放会看见内容被推走 |
+| `Task.Delay` | 200 ms | 比动画长一档留余量，**实测成立**。没用动画 `Completed` 回调接力 `Close()`——那条未实测，`Delay` 这条路跑出了下面那组读数 |
+| `Closed` 等待上限 | 1200 ms | 同一场景实测 `CLOSE_TO_EXIT_MS=664–1092`（含 200 ms 动画段），说明 65 MB 快照写入在窗口消失后 ≤ 900 ms 内落完，上限没被咬到；换更慢的存储或更大的落盘要重测 |
+
+**判据（用户点名要跑时序时才跑）**：UIA 起表 —— `CloseMainWindow()` 记 `t0`，轮询到该 `hwnd` 从 UIA 根消失记 `WINDOW_GONE_MS`，进程退出记 `CLOSE_TO_EXIT_MS`。本机实测：修复前 `WINDOW_GONE_MS=452–543`（全程冻结）；修复后 `236–250`（带淡出）、脏数据时 `CLOSE_TO_EXIT_MS=664–1092`，无脏数据 `231–317` / `312–453`。读法：`WINDOW_GONE_MS` 明显大于动画时长（>350 ms）就是还有一件慢活留在 UI 线程；**动画顺不顺是目测项，UIA 证不住**。

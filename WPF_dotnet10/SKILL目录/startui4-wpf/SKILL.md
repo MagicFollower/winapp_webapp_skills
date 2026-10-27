@@ -1,6 +1,6 @@
 ---
 name: startui4-wpf
-description: 用 StartUI4Controls（StartUI4.WPF v3.0.0，net10.0-windows 纯 C# 模板 WPF 组件库）搭工程、改界面与发版本的可复现流程——app/+lib/ 源码自包含骨架（lib 种子本地优先、按 manifest 回源，自持基线 48 文件/DP 238）、UI4Theme 38 令牌与 UI4.Font.* 排印键、开工前四挡决策（明暗/分发/套装与局部换肤/设置按钮与面板内容）、设置面板（应用信息/配色/字体/全局缩放，kv1 落盘与 ZoomedSize 下限）、启动顺序与 DWM 标题栏、UI4 控件用法（对话框/托盘/代码编辑器、菜单长文字截断、GridView 横向固定、NavigationView ItemFontSize）、UI4NavigationView 左栏默认壳（NavigationRailCase，右内容四角/12px 间距/项边距/主题重打）、官方 WPF TabControl+TabItem 左栏可滚页签模板（assets/templates/cases，含 TabItem.Margin 双扣导致底部圆角被裁的修复）、卡片网格拖动排序（八角色、PART_ItemRoot、最近槽位、ObservableCollection.Move+FLIP）、自适应当编码期约束、间距/阴影/悬浮余量、单文件两档发布（产物名 `<App>_v<Version>_<mode>_build_<yyyyMMddHHmmss>.exe`）与 --selftest 门禁、FileVersion 守门、字母像素图标生成、T0Level 八节文档与目录收敛、既有工程修 bug/优化的 5.1–5.3 三步流程（分析→最小化修改+自检→当日修复清单）、lib 改动回灌种子/重钉清单/三工程同步。当需要新建 .NET 10 WPF 应用、写/改 UI4* 的 XAML/C#、加设置页/主题/字号缩放、切主题或调字号后某处没跟着变、DynamicResource 解析不到、组件源码缺失、深色对比度不对、打包 WPF 单 exe、补上手文档或收敛工程、在既有 StartUI4 工程修缺陷/做优化时使用；不用于 WinForms、UWP/WinUI、.NET Framework 48 版 StartUI4 或不含该库的普通 WPF 页面。
+description: 用 StartUI4Controls（StartUI4.WPF v3.0.0，net10.0-windows 纯 C# 模板 WPF 组件库）搭工程、改界面与发版本的可复现流程——app/+lib/ 源码自包含骨架（lib 种子本地优先、按 manifest 回源，自持基线 48 文件/DP 238）、UI4Theme 38 令牌与 UI4.Font.* 排印键、开工前四挡决策（明暗/分发/套装与局部换肤/设置按钮与面板内容）、设置面板（应用信息/配色/字体/全局缩放，kv1 落盘与 ZoomedSize 下限）、启动顺序与 DWM 标题栏、UI4 控件用法（对话框/托盘/代码编辑器、菜单长文字截断、GridView 横向固定、NavigationView ItemFontSize）、UI4NavigationView 左栏默认壳（NavigationRailCase，右内容四角/12px 间距/项边距/主题重打）、官方 WPF TabControl+TabItem 左栏可滚页签模板（assets/templates/cases，含 TabItem.Margin 裁底部圆角的修复）、卡片网格拖动排序（八角色、PART_ItemRoot、最近槽位、ObservableCollection.Move+FLIP）、窗口关闭两段式+退场动画（治「卡顿且无动画」）、自适应当编码期约束、间距/阴影/悬浮余量、单文件两档发布（产物名 `<App>_v<Version>_<mode>_build_<yyyyMMddHHmmss>.exe`）与 --selftest 门禁、FileVersion 守门、字母像素图标生成、T0Level 八节文档与目录收敛、既有工程修 bug/优化的 5.1–5.3 三步流程（分析→最小化修改+自检→当日修复清单）、lib 改动回灌种子/重钉清单/三工程同步。当需要新建 .NET 10 WPF 应用、写/改 UI4* 的 XAML/C#、加设置页/主题/字号缩放、切主题或调字号后某处没跟着变、DynamicResource 解析不到、组件源码缺失、深色对比度不对、打包 WPF 单 exe、补上手文档或收敛工程、在既有 StartUI4 工程修缺陷/做优化时使用；不用于 WinForms、UWP/WinUI、.NET Framework 48 版 StartUI4 或不含该库的普通 WPF 页面。
 ---
 
 # StartUI4.WPF 桌面应用搭建与组件使用
@@ -29,6 +29,7 @@ StartUI4Controls 是**零 XAML** 的 WPF 组件库：39 个 `UI4*` 控件的模�
 - 要给应用加**设置面板**：明暗档切换、字体族与字号、全局缩放、"关于/应用信息"，或反过来要把这些能力补进一个已有窗口（Step 4.5 有整条通路与自测）。
 - 用户报"字号调大后按钮里的字跑偏 / 设置里恢复默认后下拉框空白 / 缩放后窗口拖不动"这类观感问题（多数不是渲染 bug，而是钉死尺寸、层级抹平、ComboBox 清空列表外值这三条机制）。
 - 托盘图标、原生标题栏染色、代码编辑器、右键菜单这类系统集成面。
+- 用户报「点关闭后窗口僵住半秒才消失，而且没有动画」，或新建的窗口**关闭时要落盘 / 排空队列 / 释放句柄**：走「实战场景：窗口关闭默认方案（两段式 + 退场动画，不卡顿）」，完整代码在 `references/host-integration.md` 的「窗口关闭：两段式 + 退场动画（完整代码）」。
 - 要用官方 WPF `TabControl` + `TabItem` 做左侧可滚页签（固定页签 + 内容区，保留键盘与自动化语义）：复制 `assets/templates/cases/OfficialTabCase.xaml(.cs)`；`TabItem` 不要用 `Margin` 做间隔（会触发布局裁剪切掉底部圆角），细则与验收见 `references/host-integration.md` 的「官方 WPF TabControl + TabItem」。
 - 要用 `UI4NavigationView` 做左侧导航：默认复制 `assets/templates/cases/NavigationRailCase.xaml` + `.xaml.cs`（替换 `__APPNAME__`）；它已封装右内容面板四角/12 px 间距、标题 24、导航项背景边距与切主题重打，不要各自重写一套宿主补丁。
 - 要在 `UI4GridView` 或任意卡片网格上做**拖动排序**（卡片跟手、其余卡片让位动画、首尾/空隙任意落点、松手才落盘），或遇到"松手页面跳一下 / 拖动只在卡片上生效 / 拖动后悬浮放大失效"：照「实战场景：卡片网格拖动排序（组件内通用方案）」的八角色契约与七步做。
@@ -302,7 +303,7 @@ if (picked.HasValue) UI4Theme.SetAccent(picked.Value);
 
 右键菜单是纯代码组件：`menu.AddItem(new UI4MenuItem(UI4MenuItemType.Copy, text, null, handler)); menu.Attach(host); menu.Open();`
 
-托盘 `UI4NotifyIcon` 必须在 `OnClosing` 里 `Visibility = Visibility.Collapsed; Dispose();`，否则托盘残留"点不动的死图标"（Shell 行为，不是库的 bug）。`UI4CodeEditor` 的语法高亮配色由 XSHD 决定、不跟主题，库只染外壳底与前景。
+托盘 `UI4NotifyIcon` 必须在 `OnClosing` 里 `Visibility = Visibility.Collapsed; Dispose();`，否则托盘残留"点不动的死图标"（Shell 行为，不是库的 bug）。**做了两段式关闭时这一步要放在第一次 `Closing` 分支里**，别挪进 `Closed`——走 `Environment.Exit(0)` 那条路时 `Closed` 可能根本不执行（见「实战场景：窗口关闭默认方案」）。`UI4CodeEditor` 的语法高亮配色由 XSHD 决定、不跟主题，库只染外壳底与前景。
 
 ## Step 6 — 发布两档 + 自测门禁
 
@@ -338,6 +339,28 @@ if (picked.HasValue) UI4Theme.SetAccent(picked.Value);
 
   `-Glyph` 可显式指定首字母（只支持 A–Z 点阵），`-Sizes` 换尺寸集。帧表越大 exe 越大，本机实测：单帧 4,286 B → 七帧 105,414 B 的 ico，让框架依赖单文件包从 `1,393,834 B` 涨到 `1,696,938 B`（未压缩档里 ico 会同时进 apphost 与 WPF 资源两处），自带运行时档只涨 `+105,567 B`（整包压缩过）。只要日常观感就 `-Sizes 16,32,48,256`。要改用外部图（例如 `selfh.st/icons` / `github.com/selfhst/icons` 的 `ico/` 现成多尺寸 ico）就**直接覆盖** `app/AppIcon.ico`，同时把来源 URL、图标 ref、许可（那份仓库是 CC-BY-4.0，要署名并注明修改）记进 `doc/` 第 5 节——署名不能只写在聊天里。
 - **间距与外溢余量见 Step 3「间距与留白」**：刻度只用 4 的倍数，同排 ≥ 8、分组之间 ≥ 16、内容到窗口边缘 ≥ 16；卡片外边距 ≥ `ShadowDepth + ShadowBlurRadius`（≈13~27），`ItemMargin` 左右 ≥ 10 才留得住悬浮放大的预算。窗口收窄时先让**分档**改列数，不要靠压掉 margin 来腾地方——margin 被压成 0 的那一刻，投影切边与"悬浮没反应"就会同时出现。
+
+## 实战场景：窗口关闭默认方案（两段式 + 退场动画，不卡顿）
+
+> 默认用在**任何关闭时要落盘、要释放非托管句柄、要排空队列**的窗口上；纯只读窗口可以只保留动画那半。
+> 完整代码（VM 两段、根 Grid + 遮罩 XAML、`Closing`/`Closed`/动画方法、参数表与时序判据）在 `references/host-integration.md` 的「窗口关闭：两段式 + 退场动画（完整代码）」——照它抄，不要在这里的原理段上重写一套。
+
+**「卡顿」和「没有动画」是同一个根因的两半**：`Closing` 里在 UI 线程同步做慢活（写文件 / `Dispose` 要等锁的对象 / 排空事件队列），窗口线程被占住就没有帧可画；而 WPF 在 `Closing` 返回且未 `Cancel` 的那一刻销毁 HWND，动画没有载体。**只搬慢活不加动画 = 仍然瞬间消失；只加动画不搬慢活 = 动画跑到一半冻住。**两个症状要一起消。
+
+四个部件，缺一个就退回卡顿：
+
+1. **VM 拆两段**：`BeginShutdown()`（同步、UI 线程、只做快事：停定时器 + 取消后台 CTS + 把待释放对象**摘走引用**）与 `FinishShutdownAsync()`（`Task.Run`：Dispose 摘下来的那个 + 落盘；返回"是否真的做了那件慢事"，没做窗口就不必为它等）。`FileSystemWatcher.Dispose()`、要拿独占锁的 `Save()` 只能出现在第二段。
+2. **根 Grid 挂 `RenderTransform` + 一层退场遮罩**：`x:Name="RootGrid" RenderTransformOrigin="0.5,0.5"` + `<ScaleTransform x:Name="RootScale"/>`，遮罩 `Panel.ZIndex` 高于一切、含一行状态文字（「正在保存…」）。遮罩要住在根 Grid **内部**，淡出才连它一起收掉。全局缩放（Step 7）占 `LayoutTransform`、退场占 `RenderTransform`，**两个槽位可以叠在同一个 Grid 上**。
+3. **`Closing` 三态**：第一次进入一律 `_closeStarted=true; e.Cancel=true;` → `BeginShutdown()` → `_ = CloseWithAnimationAsync(vm)`（**不能 `await`**，在 `Closing` 里等就变回同步）；动画放遮罩 → **先起后台落盘再播动画**（动画时长就是它的工作时长）→ `Close()` 第二次进来 `_closeStarted` 已真、放行，那一趟只许写"必须 UI 线程"的小活（存窗口几何）。
+4. **`Closed` 有上限地等**：`if (!_saveTask.Wait(1200) && !_saveTask.IsCompleted) Environment.Exit(0);`。上限放在 `Closed` 而不是 `Closing`——这时窗口已经不可见，用户不会觉得卡，但进程不能因为后台任务挂死而留下一个**没有窗口的活进程**。落盘本身必须是"写 `.tmp` → 覆盖目标"的替换，否则这条等待上限就是在制造数据损坏。
+
+参数钉死（改了要重新量时序）：淡出 1→0 与缩放 1→**0.975** 同挂、`170 ms` `QuadraticEase(EaseIn)`、`await Task.Delay(200)` 后才 `Close()`。缩放**不要**做到 0.8/0：大幅缩放会露出桌面、跟 DWM 原生关闭表现打架，读起来像"窗口被弹走"（**这条是取舍，没做 0.8/0.975 对照实验**；0.975 是现网值，观感属目测项）。各参数的实测/取舍逐行标在 `references/host-integration.md` 那张参数表里。
+
+StartUI4 侧两条连带：① 托盘 `UI4NotifyIcon` 的 `Collapsed + Dispose()`（Step 5）要在**第一次** `Closing` 分支里做，**不要放进 `Closed`**——走 `Environment.Exit(0)` 那条路时 `Closed` 可能根本不执行，症状就是托盘留一个点不动的死图标；② `UI4Theme.ThemeChanged`、`CompositionTarget.Rendering`、`WndProc` hook、热键这些全局退订留在 `Closed`（强杀那条路下进程已退出，不必担心泄漏）。
+
+反模式（每条都对应一个可见症状）：慢活留在 `Closing` 同步做＝冻结半秒；只加动画＝动画跑到一半掉帧；`Closed` 里无限 `Wait()`＝留下无窗口的活进程；把退场动画写进 `LayoutTransform`＝逐帧重排整棵子树（**这条是机制推断，本机未实测**）；`Close()` 早于动画结束＝"动画跑到一半突然消失"。
+
+判据（**只有用户点名要跑时序时才跑**，默认门禁仍是 `dotnet build` 0 错误）：UIA 起表量 `WINDOW_GONE_MS`（`CloseMainWindow()` → 该 `hwnd` 从 UIA 根消失）与 `CLOSE_TO_EXIT_MS`（进程退出）。本机一份关闭时写 65 MB 快照的工程实测（2026-10-27）：修复前 `452–543 ms` 全程冻结 → 修复后 `236–250 ms`（带淡出）、脏数据时进程退出 `664–1092 ms`、无脏数据 `231–317 ms` / `312–453 ms`。读法：`WINDOW_GONE_MS` 明显大于动画时长（>350 ms）就是还有一件慢活留在 UI 线程；**动画顺不顺永远是目测项，UIA 与截图都证不住**。
 
 ## 实战场景：卡片网格拖动排序（组件内通用方案）
 
@@ -584,6 +607,8 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 | `dotnet pack` 报 `NU5019` | `lib/LICENSE.txt` 缺失（csproj 里 `<None Pack="true">` 指它） | 跑 `fetch-source.ps1` 补种子，别删 csproj 那行 |
 | 构建说找不到 `AvalonEdit` | NuGet 源不可达（lib 唯一第三方依赖） | 先在线 restore 一次；离线机预置包缓存 |
 | 双击单 exe 秒退/无窗口 | 首次启动要解原生库到 `%TEMP%\.net\<App>_self_contained\`，或杀软拦解包；也可能真崩了 | 看事件日志与 `%APPDATA%\<App>\selftest.txt`；别先怀疑打包 |
+| 点关闭后窗口僵住约半秒才消失、而且没有动画 | 慢活（落盘 / 排空 watcher / `Dispose` 要等锁的对象）跑在 UI 线程的 `Closing` 里；WPF 又在 `Closing` 返回未 `Cancel` 时就销毁 HWND，动画没载体——**卡顿与无动画同一根因** | 走「实战场景：窗口关闭默认方案」的四件部件；只加动画不搬慢活会退回"动画跑到一半冻住" |
+| 关闭后残留一个没有窗口的进程，或托盘留死图标 | `Closed` 里对后台任务无限 `Wait()`；或托盘释放写在 `Closed`，被 `Environment.Exit(0)` 那条路跳过 | 等待加硬上限（1200 ms；同场景实测 `CLOSE_TO_EXIT_MS=664–1092`，上限没被咬到），等不到就 `Exit`；托盘释放挪进第一次 `Closing` |
 | 托盘留下点不动的死图标 | `UI4NotifyIcon` 没在 `OnClosing` 里 `Collapsed` + `Dispose()` | 补上（Shell 行为，不是库的 bug） |
 | 悬浮放大越出父容器 | `HoverScale` 太大、按像素预算被钳过，或宿主在 `ScrollViewer+StackPanel` 里给了无限宽 | 见组件手册 §3.7 的钳制公式，别加 `ClipToBounds` 兜底 |
 | 悬浮上去"没反应"，放大倍率像坏了 | `ItemMargin` 贴边 0，`sideSlack + 4 − 6 ≤ 0` 把放大预算整个吃掉（契约见 Step 3 第 4 条） | `UI4ListView`/`UI4GridView` 的 `ItemMargin` 左右给 ≥ 10 |
@@ -615,7 +640,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 
 ## Step 10 — 验收清单
 
-窄改动只跑覆盖该面的那一挡；新建工程、改主题通路或改排印通路要跑到第 12 条，新建工程另跑第 14 条（`run.cmd` 快速启动回路）。UIA 挡证不住颜色与字号，这些结论用截图或 `--selftest` 的 `INFO` 行。
+窄改动只跑覆盖该面的那一挡；新建工程、改主题通路或改排印通路要跑到第 12 条，新建工程另跑第 14 条（`run.cmd` 快速启动回路）与第 15 条（关闭退场）。UIA 挡证不住颜色与字号，这些结论用截图或 `--selftest` 的 `INFO` 行。
 
 **改 bug / 做优化不主动跑本清单**：那条路走「优化与 bug 处理：三步执行流程」，默认只有 `dotnet build` → `0 个错误` 一道门禁，用户点名哪一挡才跑哪一挡。本清单用于新建工程、改主题/排印通路、以及整轮交付前。
 
@@ -633,6 +658,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 12. 设置面板（做了第 4 挡才要跑）：齿轮开得起来，完成 / 遮罩 / Esc 三种关法都关得掉；四节齐全且**改了就立即生效**（配色整窗连标题栏、字号带动层级与圆钮尺寸、缩放不裁切）；关掉面板后 `%APPDATA%\<App>\settings.json` 里看得见的值就是刚选的那套，重启仍是它；把字号拉到 28、缩放拉到 200% 看一遍截断与窗口下限，再回到默认。判据：`FontSize="[0-9]` 静态扫描为空 + 排印段全绿，其余目测（Step 4.5 末）。
 13. 种子没被改动过：`fetch-source.ps1` 打 `LOCAL 48/48 种子完整，未联网`，且 `git status` 里 `assets/seed/lib` 干净。改过 `lib/` 就要走"源码来源与升级"的第 2 步重钉清单，否则下一个工程会被 sha 校验挡在退 5。
 14. 新建工程根目录的 `run.cmd` 能构建并启动最新 Debug exe；`run.cmd selftest` 退出码 0。它只是便捷回路，不替代第 1–2 条门禁。
+15. 关闭（新建工程必查；窗口关闭时没有落盘/释放负担就只查后半条）：点关闭 → 窗口**有淡出与轻微收拢**而不是瞬间消失、遮罩上的状态文字看得见；目测无冻帧。有负担的再加量一层时序：`WINDOW_GONE_MS` 不显著大于动画时长（>350 ms 就是还有慢活留在 UI 线程），且 `Closed` 之后 `Get-Process -Name <App>*` 残留为 0（既不能卡、也不能留下没有窗口的活进程）。判据与量法见「实战场景：窗口关闭默认方案」。
 
 ## 实测基准（单机口径，换机器请重测）
 
@@ -691,7 +717,7 @@ Mouse.OverrideCursor = Cursors.SizeAll;
 
 - `references/controls.md` — 39 控件选型表、与原生类的继承关系差异、**不接主题的 19 个颜色 DP**、字号与字体族那 6 处引用点、逐条实测过的限制（含 `Popup` 不吃 `LayoutTransform`、`UI4ListBox` 触发器画刷走绑定、菜单长文字截断三件套、`UI4GridView` 横向固定不滚、`UI4NavigationView` 项尺寸与 UIA）。
 - `references/theming.md` — 38 令牌与资源键规则、**排印键 `UI4.Font.*` 与两层覆盖**、`UI4Theme`/`UI4ThemeScope`/`UI4ThemePacks` API、8 套预置键与场景、系统跟随与持久化、DWM 标题栏四条通路。
-- `references/host-integration.md` — app 侧契约：csproj 双侧关键行、`app.manifest` DPI 逐字、**启动序列九步六条硬约束（含排印覆盖要在装字典之后、带事件处理器的模板要住在本 XAML 的宿主里）**、宿主配色单源→令牌的写法、设置底座六个文件的职责、自测契约（配色 / 设置 / 排印三段各钉什么，含三个示例项目各自的断言规模）、图标三处通路、官方 WPF `TabControl` + `TabItem` 左栏可滚页签的三条硬约束与验收。
+- `references/host-integration.md` — app 侧契约：csproj 双侧关键行、`app.manifest` DPI 逐字、**启动序列九步六条硬约束（含排印覆盖要在装字典之后、带事件处理器的模板要住在本 XAML 的宿主里）**、宿主配色单源→令牌的写法、设置底座六个文件的职责、自测契约（配色 / 设置 / 排印三段各钉什么，含三个示例项目各自的断言规模）、图标三处通路、官方 WPF `TabControl` + `TabItem` 左栏可滚页签的三条硬约束与验收、**「窗口关闭：两段式 + 退场动画（完整代码）」四段代码与参数表**（做关闭退场时照它抄）。
 - `assets/templates/cases/OfficialTabCase.xaml(.cs)` — 官方 WPF `TabControl` + `TabItem` 的左栏可滚页签完整案例（13 页、keyed 样式、4px 间隔行、`UI4ScrollViewer`）；复制到 `app/Views/` 后替换 `__APPNAME__`。细则与验收见 `references/host-integration.md` 的「官方 WPF TabControl + TabItem」。
 - `assets/templates/cases/NavigationRailCase.xaml(.cs)` — `UI4NavigationView` 左侧导航的**默认宿主壳**：右内容四角 12/左侧 12 px 间距/顶部 20、标题左边 24、首卡 `ItemMargin=20`、导航项背景左 4/右 5/上下 4、内部 ScrollViewer 内边距归零，以及 `UI4Theme.ThemeChanged` 的 Loaded/ApplicationIdle 重打。复制到 `app/Views/` 后替换 `__APPNAME__`；数据项与页面内容换成真实来源。
 - `示例项目3（Windows快捷工具面板）/QuickPanel` — 随 Skill 附带的完整参考实现，也是「实战场景：卡片网格拖动排序（组件内通用方案）」的首个落地实例；该场景在 `README.md` §11–§12、`app/MainWindow.xaml`（手柄标记 + Preview 事件）、`app/MainWindow.xaml.cs`（拖动管线与 FLIP）、`ViewModels/ToolSection.cs`（有序集合 + `MoveFavoriteItem`）、`ViewModels/MainViewModel.cs`（`CommitFavoriteReorder`）、`Services/SettingsService.cs`（`MoveFavoriteToIndex`）。
