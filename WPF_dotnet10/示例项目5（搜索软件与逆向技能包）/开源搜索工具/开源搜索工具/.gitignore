@@ -1,0 +1,19 @@
+# 构建产物与运行期数据
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+publish/
+publish_no_runtime/
+
+# 原始逆向资产：不进入公开仓库（保留在本地）
+_rev/
+文件搜索工具-*.exe
+*.7z
+
+# 验收临时物
+*.log
+*.tmp
+bench/results/
