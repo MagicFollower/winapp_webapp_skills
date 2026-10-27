@@ -25,10 +25,13 @@
         </Style>
     </Window.Resources>
 
-<Grid>
+<Grid x:Name="RootGrid" RenderTransformOrigin="0.5,0.5">
         <Grid.LayoutTransform>
             <ScaleTransform ScaleX="{Binding ZoomFactor}" ScaleY="{Binding ZoomFactor}"/>
         </Grid.LayoutTransform>
+        <Grid.RenderTransform>
+            <ScaleTransform x:Name="RootScale"/>
+        </Grid.RenderTransform>
 
         <ui:UI4Grid>
             <Grid Margin="16">
@@ -383,6 +386,16 @@
                     HorizontalAlignment="Center" VerticalAlignment="Center">
                 <views:SettingsOverlay DataContext="{Binding}"/>
             </Border>
+        </Grid>
+
+        <!-- 退场遮罩：关闭时先把「正在保存索引…」盖上去，再整窗淡出。
+             它在 RootGrid 内部，所以淡出动画会连它一起收掉。 -->
+        <Grid x:Name="ClosingOverlay" Panel.ZIndex="120" Visibility="Collapsed"
+              Background="{DynamicResource UI4.Brush.Background}">
+            <TextBlock x:Name="ClosingStatusText" Text="正在保存索引…"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       FontSize="{DynamicResource App.Font.Size.Medium}"
+                       Foreground="{DynamicResource UI4.Brush.TextMuted}"/>
         </Grid>
     </Grid>
 </Window>

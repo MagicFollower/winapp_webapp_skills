@@ -46,6 +46,7 @@ namespace IndexApp.ViewModels
         private CancellationTokenSource? _indexCts;
         private CancellationTokenSource? _reconcileCts;
         private IndexWatcher? _watcher;
+        private IndexWatcher? _pendingWatcherDispose;
         private DispatcherTimer? _liveRefreshDebounce;
         private long _liveAppliedCount;
         private bool _dirtySinceSave;
@@ -260,11 +261,23 @@ namespace IndexApp.ViewModels
                 RaisePropertyChanged();
 
                 if (_shuttingDown) return;
-                if (value) StartWatcher();
+                if (value)
+                {
+                    StartWatcher();
+                }
                 else
                 {
-                    StopWatcher("实时刷新：已关闭");
+                    var oldWatcher = StopWatcher("实时刷新：已关闭");
                     IndexStateCode = "off";
+                    if (oldWatcher != null)
+                    {
+                        // Dispose 会排空事件队列并可能等索引锁，别把它压在 UI 线程上。
+                        _ = Task.Run(() =>
+                        {
+                            try { oldWatcher.Dispose(); }
+                            catch { }
+                        });
+                    }
                 }
             }
         }
@@ -370,9 +383,18 @@ namespace IndexApp.ViewModels
             Rows = null;
             CountText = "";
             IndexStatusText = "正在扫描目录…";
-            StopWatcher("实时刷新：重建中");
+            var oldWatcher = StopWatcher("实时刷新：重建中");
             _reconcileCts?.Cancel();
             _indexCts?.Cancel();
+            if (oldWatcher != null)
+            {
+                // 旧 watcher 的排空要等索引锁，放到后台做，别把 F5 点下去的那一下卡成白等。
+                await Task.Run(() =>
+                {
+                    try { oldWatcher.Dispose(); }
+                    catch { }
+                }).ConfigureAwait(true);
+            }
             _indexCts = new CancellationTokenSource();
             var ct = _indexCts.Token;
 
@@ -545,7 +567,8 @@ namespace IndexApp.ViewModels
             IndexStateCode = "live";
         }
 
-        private void StopWatcher(string? reason = null)
+        /// <summary>只解绑并摘走 watcher，不在调用线程 Dispose：Dispose 会排空事件队列并等索引锁。</summary>
+        private IndexWatcher? StopWatcher(string? reason = null)
         {
             var watcher = _watcher;
             _watcher = null;
@@ -553,11 +576,10 @@ namespace IndexApp.ViewModels
             {
                 watcher.Changed -= OnWatcherChanged;
                 watcher.Faulted -= OnWatcherFaulted;
-                try { watcher.Dispose(); }
-                catch { }
             }
 
             if (reason != null) LiveStatusText = reason;
+            return watcher;
         }
 
         private void OnWatcherChanged(object? sender, IndexChangedEventArgs e)
@@ -592,8 +614,11 @@ namespace IndexApp.ViewModels
             StatusMessage = ex.Message;
         }
 
-        /// <summary>窗口关闭时停监视、取消后台任务，并把运行期间的增量落盘（无变更不写）。</summary>
-        public void Shutdown()
+        /// <summary>
+        /// 关闭的第一段，只跑在 UI 线程且必须快：停定时器、取消后台任务、摘走 watcher。
+        /// 真正可能慢的两件事（排空 watcher、写快照）留给 <see cref="FinishShutdownAsync"/>。
+        /// </summary>
+        public void BeginShutdown()
         {
             if (_shuttingDown) return;
             _shuttingDown = true;
@@ -606,25 +631,39 @@ namespace IndexApp.ViewModels
             _previewCts?.Cancel();
 
             var watcher = _watcher;
-            StopWatcher();
             if (watcher != null && watcher.AppliedChangeCount > 0) _dirtySinceSave = true;
+            _pendingWatcherDispose = StopWatcher("正在保存索引…");
+            IndexStateCode = "stopped";
+        }
 
-            var index = _index;
-            if (index != null && _dirtySinceSave)
+        /// <summary>
+        /// 关闭的第二段，跑在后台线程：排空并释放 watcher，再把运行期间的增量落盘。
+        /// 返回值 = 是否真的写了快照；没写（无变更）时窗口不必为它多等。
+        /// </summary>
+        public Task<bool> FinishShutdownAsync()
+        {
+            return Task.Run(() =>
             {
+                try { _pendingWatcherDispose?.Dispose(); }
+                catch { }
+                _pendingWatcherDispose = null;
+
+                var index = _index;
+                if (index == null || !_dirtySinceSave) return false;
+
                 try
                 {
                     index.Save(SnapshotPath);
                     _dirtySinceSave = false;
+                    return true;
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage = "索引保存失败：" + ex.Message;
+                    try { _dispatcher.BeginInvoke(new Action(() => StatusMessage = "索引保存失败：" + ex.Message)); }
+                    catch { }
+                    return false;
                 }
-            }
-
-            _settings.Save();
-            IndexStateCode = "stopped";
+            });
         }
 
         private IndexOptions BuildOptions()

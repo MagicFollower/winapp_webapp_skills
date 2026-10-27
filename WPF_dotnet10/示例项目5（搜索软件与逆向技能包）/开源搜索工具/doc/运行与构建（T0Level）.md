@@ -60,7 +60,7 @@ lib\UI4Panel.cs(21,28): warning CS1574: XML 注释中有未能解析的 cref 特
     run.cmd
     # 或：dotnet run --project app\IndexApp.csproj
 
-判据：窗口出现，标题 `IndexApp`；默认底部状态行为 `生效键 paper-grey`；右上角齿轮打开设置浮层（Esc / 点遮罩 /「完成」都能关）；「配色」点深色，整窗与原生标题栏一起变，底部状态行的 `生效键` 从 `paper-grey` 变 `dark`；再点浅色回到 `light`。已知边界：下拉浮层与右键菜单不吃 `LayoutTransform`，缩放档下弹层内容仍按 100% 渲染。
+判据：窗口出现，标题 `IndexApp`；默认底部状态行为 `生效键 paper-grey`；右上角齿轮打开设置浮层（Esc / 点遮罩 /「完成」都能关）；「配色」点深色，整窗与原生标题栏一起变，底部状态行的 `生效键` 从 `paper-grey` 变 `dark`；再点浅色回到 `light`。关闭时先浮出「正在保存索引…」遮罩并做 170 ms 淡出+缩放，窗口在 250 ms 内消失，快照写盘在后台线程完成。已知边界：下拉浮层与右键菜单不吃 `LayoutTransform`，缩放档下弹层内容仍按 100% 渲染。
 
 设置落盘在 `%APPDATA%\IndexApp\settings.json`（kv1 纯文本）；索引快照在 `%LOCALAPPDATA%\IndexApp\index.bin`。默认索引根是所有就绪的固定盘；自动化可用 `INDEXAPP_ROOT` / `INDEXAPP_SNAPSHOT` 覆盖。范围按钮只接受索引中已有的目录；新建/被排除目录会提示重建。也可 `IndexApp.exe --path "D:\Apps"` 启动即限定范围。M2.0 运行中新增/删除/重命名文件会自动进入/退出搜索结果；应用关闭期间的文件名变化由启动后台对账补齐，状态栏显示 `实时刷新：开` / `后台校验` / `启动对账`。
 
@@ -165,8 +165,8 @@ INFO 字号阶梯：基准=15 → 胶囊=11 标签=12 次要=13 正文=15 提示
 
 | 档位 | 产物 | 目标机要求 | 本机实测 |
 |---|---|---|---|
-| 框架依赖 | `publish_no_runtime\IndexApp_v0.2.0_no_runtime_build_20261027200103.exe` | 必须已装 `Microsoft.WindowsDesktop.App` 10.x | `1,758,754 bytes`；selftest 0；30s 空闲私有 240.3 MB |
-| 自带运行时 | `publish\IndexApp_v0.2.0_self_contained_build_20261027200113.exe` | 免装 .NET | `70,337,651 bytes`；selftest 0；30s 空闲私有 316.5 MB（超过 300MB 闸门） |
+| 框架依赖 | `publish_no_runtime\IndexApp_v0.2.0_no_runtime_build_20261027230213.exe` | 必须已装 `Microsoft.WindowsDesktop.App` 10.x | `1,758,754 bytes`；selftest 0；30s 空闲私有 240.3 MB |
+| 自带运行时 | `publish\IndexApp_v0.2.0_self_contained_build_20261027230225.exe` | 免装 .NET | `70,339,964 bytes`；selftest 0；30s 空闲私有 316.5 MB（超过 300MB 闸门） |
 
 判据：
 
@@ -180,12 +180,12 @@ INFO 字号阶梯：基准=15 → 胶囊=11 标签=12 次要=13 正文=15 提示
 [1/3] publish single-file, FRAMEWORK-DEPENDENT ...
 [2/3] self-test of the packaged exe ...
 selftest exit code: 0
-  publish_no_runtime\IndexApp_v0.2.0_no_runtime_build_20261027200103.exe   1758754 bytes
+  publish_no_runtime\IndexApp_v0.2.0_no_runtime_build_20261027230213.exe   1758754 bytes
 
 [1/3] publish single-file, SELF-CONTAINED ...
 [2/3] self-test of the packaged exe ...
 selftest exit code: 0
-  publish\IndexApp_v0.2.0_self_contained_build_20261027200113.exe   70337651 bytes
+  publish\IndexApp_v0.2.0_self_contained_build_20261027230225.exe   70339964 bytes
 
 MainWindowTitle 回读（自包含单文件）：IndexApp
 冷启动到首屏（自包含单文件，默认全盘快照）：1,605 ms；框架依赖：1,476 ms
@@ -253,11 +253,11 @@ center=Color [A=255, R=247, G=249, B=251]
 ```text
 FileVersion=0.2.0.0
 publish_no_runtime=1,758,754 bytes
-publish_self_contained=70,337,651 bytes
+publish_self_contained=70,339,964 bytes
 self_contained_selftest_exit=0
 no_runtime_selftest_exit=0
-SHA256(no_runtime)=D5B6F4B534285C542A669DECF67ED544CD8816B65CEF78D5A1CD66570B0E2E87
-SHA256(self_contained)=5A366192DE3D4FD4774CC61838FC0CA95F4CB341B21C4C1AF1F1124B1C290A40
+SHA256(no_runtime)=5FEBC5F9913A4665E5114D830746A623B65B51B1B413637458CCBF92E52E6F35
+SHA256(self_contained)=92B927E1C1EF4E5087D473FED5E04D383FFE1041740A7F39D278C7916BCA9AC7
 ```
 
 目标机排查：`dotnet --list-runtimes` 有没有 WindowsDesktop 10.x（框架依赖档）→ 首次解包是否被杀软拦 → `%APPDATA%\IndexApp\selftest.txt` 有没有红。
@@ -280,6 +280,8 @@ SHA256(self_contained)=5A366192DE3D4FD4774CC61838FC0CA95F4CB341B21C4C1AF1F1124B1
 - **默认扫描范围**：所有就绪的固定盘（本机 C:\、D:\、E:\），按名字/路径排除 `WinSxS`、`Installer`、`Package Cache`、`node_modules` 以及应用自身数据目录；如需收窄用 `INDEXAPP_ROOT`。范围按钮只接受已在索引中的目录，新建/被排除目录会明确提示重建。
 - **扫描不会伤硬盘**：只读文件名/大小/时间等元数据，不读文件内容、不写被扫描盘；快照写到 `%LOCALAPPDATA%`。首次全量枚举是一次性 I/O，之后加载快照；F5/重建才会再次全量扫描。M2.0 的实时刷新用目录变更通知，不轮询文件内容。正常读取不会损坏硬盘，频繁重建只会增加 I/O。
 - **本次 M2.0 UI 冒烟实测（UIA）**：独立测试根 `C:\Users\webtu\IndexAppM2UiTest\root`；运行中创建 `live-new.txt` → 搜索命中，状态 `实时刷新：开 · 已同步 1 项`；删除 → 搜索 0 项；关闭应用后新增/删除/重命名，重启后台对账 `新增 2 / 删除 2 / 更新 0` 并搜索一致；设置浮层实时刷新勾选 On，主题区 `灰纸套装（预置） → 生效键 paper-grey`。截图：`docs/screenshot-indexapp.png`。
+- **关闭路径实测**：运行中创建 3000 个文件后立刻关闭，窗口从屏幕消失 236–250 ms（带淡出），进程 664–1092 ms 退出；修复前同一场景窗口冻结 452–543 ms 且无动画。无脏数据时 231–317 ms 完成。
+- **根条目护栏实测**：三轮「洪水创建 3000 文件 → 关闭 → 重启对账 3000 删除」后 `index.bin` 稳定在 65.9–66.1 MB，`%LOCALAPPDATA%\IndexApp\index-diagnostics.log` 无 root-removal 记录。
 - **未验证项汇总**：
   - MFT/USN 全量索引与服务化：本机进程非管理员（`fsutil usn readjournal C:` 拒绝访问），无法验证卷句柄/USN；M2.0 走目录监视 + 对账，M2.1 再做。
   - 自包含包内存闸门：30s 空闲私有 316.5 MB（同机读数 309–372 MB），超过 300 MB；框架依赖包 240.3 MB 达标。已启用 `System.GC.ConserveMemory=9` 与对账后 Compact，仍不稳定压线。

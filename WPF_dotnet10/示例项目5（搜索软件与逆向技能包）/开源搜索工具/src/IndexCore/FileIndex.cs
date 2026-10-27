@@ -34,6 +34,7 @@ public sealed class FileIndex
     private int _fileCount;
     private int _dirCount;
     private int _deadCount;
+    private int _rootRemovalCount;
 
     private readonly List<string> _excludedPaths;
     private readonly HashSet<string> _excludedNames;
@@ -93,7 +94,8 @@ public sealed class FileIndex
                 + " dead=" + _deadCount
                 + " names=" + _names.Length + "/" + _names.Capacity
                 + " lower=" + _lower.Length + "/" + _lower.Capacity
-                + " pathCache=" + _pathCache.Count + " dirCache=" + _dirCache.Count;
+                + " pathCache=" + _pathCache.Count + " dirCache=" + _dirCache.Count
+                + " rootRemovals=" + Interlocked.CompareExchange(ref _rootRemovalCount, 0, 0);
         }
     }
 
@@ -665,6 +667,7 @@ public sealed class FileIndex
             bool wasDirectory = _entries[existing].IsDirectory;
             if (wasDirectory != isDirectory)
             {
+                if (_entries[existing].ParentIndex < 0) return 0;
                 RemoveSubtreeLocked(existing);
                 return AddPathLocked(full, isDirectory, size, ticks, attributes) >= 0 ? 1 : 0;
             }
@@ -734,7 +737,8 @@ public sealed class FileIndex
         }
 
         string name = Path.GetFileName(full);
-        if (string.IsNullOrEmpty(name)) name = full;
+        // 找不到就凭空补一个 "C:\" 根条目是灾难的开始：一次误删根之后会复制出上千个根。
+        if (string.IsNullOrEmpty(name)) return -1;
         return AppendEntry(parentIndex, name, 0, ticks, attributes, FileCategory.Folder);
     }
 
@@ -753,24 +757,26 @@ public sealed class FileIndex
         {
             // 旧路径不在索引里时绝不能删新路径：watcher 经常只报 Renamed 的另一端，
             // 新路径可能是一棵已经索引好的目录，删掉再 Upsert 会把整棵子树丢掉。
+            if (IsRootLikePath(newFull)) return 0;
             return UpsertPathLocked(newFull) > 0 ? 1 : 0;
         }
 
-        int existingNew = FindEntryByPathLocked(newFull);
-        if (existingNew >= 0 && existingNew != index)
-            RemoveSubtreeLocked(existingNew);
+        // 根条目不参与重命名：FileSystemWatcher 偶尔把旧名字报空，OldFullPath 会退化成 "C:\"，
+        // 这时按“类型不符”删的就是整棵卷树（实测一次丢掉 54 万条）。
+        if (_entries[index].ParentIndex < 0) return 0;
 
         string? parentPath = Path.GetDirectoryName(newFull);
         string name = Path.GetFileName(newFull);
-        if (string.IsNullOrEmpty(name)) return 0;
+        // 先确认新路径是个具体条目再动刀：否则 "C:\" 这类目标会先把 existingNew 整棵删掉。
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(parentPath)) return 0;
 
-        int newParent = -1;
-        if (!string.IsNullOrEmpty(parentPath))
-        {
-            newParent = FindDirectoryIndexLocked(parentPath);
-            if (newParent < 0) newParent = EnsureDirectoryLocked(parentPath);
-            if (newParent < 0) return 0;
-        }
+        int existingNew = FindEntryByPathLocked(newFull);
+        if (existingNew >= 0 && existingNew != index && _entries[existingNew].ParentIndex >= 0)
+            RemoveSubtreeLocked(existingNew);
+
+        int newParent = FindDirectoryIndexLocked(parentPath);
+        if (newParent < 0) newParent = EnsureDirectoryLocked(parentPath);
+        if (newParent < 0) return 0;
 
         bool isDirectory = _entries[index].IsDirectory;
         if (IsExcluded(newFull, isDirectory))
@@ -829,12 +835,23 @@ public sealed class FileIndex
     private int RemovePathLocked(string path)
     {
         int index = FindEntryByPathLocked(path);
-        return index < 0 ? 0 : RemoveSubtreeLocked(index);
+        if (index < 0) return 0;
+        // 索引根只能被「重建」换掉，不能被一条删除事件连根拔掉。
+        if (_entries[index].ParentIndex < 0) return 0;
+        return RemoveSubtreeLocked(index);
+    }
+
+    private static bool IsRootLikePath(string normalizedPath)
+    {
+        return string.IsNullOrEmpty(Path.GetFileName(normalizedPath));
     }
 
     private int RemoveSubtreeLocked(int index)
     {
         if (index < 0 || index >= _count || _dead[index]) return 0;
+
+        if (_entries[index].ParentIndex < 0)
+            LogRootRemoval(index);
 
         int parent = _entries[index].ParentIndex;
         if (parent >= 0 && !_dead[parent]) UnlinkChildLocked(parent, index);
@@ -1801,6 +1818,35 @@ public sealed class FileIndex
             ref readonly FileEntry right = ref _index._entries[y];
             return _index._lower.Get(left.LowerOffset, left.LowerLength)
                 .SequenceCompareTo(_index._lower.Get(right.LowerOffset, right.LowerLength));
+        }
+    }
+
+    /// <summary>
+    /// 删掉一个根条目等于删掉整棵卷树，是数据丢失级事件；这里留一条带栈的日志，
+    /// 让「索引莫名少了几十万条」能被定位，而不是靠猜。
+    /// </summary>
+    private void LogRootRemoval(int index)
+    {
+        Interlocked.Increment(ref _rootRemovalCount);
+        try
+        {
+            string path = GetPathNoCacheLocked(index);
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IndexApp");
+            Directory.CreateDirectory(dir);
+            string file = Path.Combine(dir, "index-diagnostics.log");
+            var info = new FileInfo(file);
+            if (info.Exists && info.Length > 256 * 1024) File.Delete(file);
+
+            File.AppendAllText(file,
+                DateTime.Now.ToString("o") + " root-removal path=" + path
+                + " index=" + index + " entries=" + _count + " live=" + (_fileCount + _dirCount)
+                + Environment.NewLine + Environment.StackTrace + Environment.NewLine,
+                Encoding.UTF8);
+        }
+        catch
+        {
+            // 诊断写不进去也不能影响索引本身
         }
     }
 

@@ -138,6 +138,74 @@ internal static class Program
         RunIncremental(root, index);
         RunReconcile(root);
         RunWatcher(root);
+        RunFlood(root);
+    }
+
+    private static void RunFlood(string root)
+    {
+        string floodRoot = Path.Combine(root, "flood");
+        string target = Path.Combine(floodRoot, "target");
+        Directory.CreateDirectory(target);
+        for (int i = 0; i < 200; i++)
+            File.WriteAllText(Path.Combine(target, "seed" + i.ToString("D3") + ".txt"), "seed");
+
+        var options = new IndexOptions { Roots = { floodRoot }, MaxEntries = 200_000 };
+        var built = FileIndex.Build(options, null, default);
+        string snap = Path.Combine(floodRoot, "flood.bin");
+        built.Save(snap);
+
+        var index = FileIndex.Load(snap, options);
+        Assert(index != null, "flood snapshot loads");
+        if (index == null) return;
+
+        int countBefore = index.Count;
+        using var watcher = new IndexWatcher(index, index.Roots, 150);
+        watcher.Start();
+        Thread.Sleep(300);
+
+        string late = Path.Combine(target, "late");
+        Directory.CreateDirectory(late);
+        for (int i = 0; i < 600; i++)
+            File.WriteAllText(Path.Combine(late, "f" + i.ToString("D4") + ".txt"), "x");
+
+        bool sawChange = false;
+        for (int wait = 0; wait < 60; wait++)
+        {
+            Thread.Sleep(100);
+            if (index.Count >= countBefore + 600) { sawChange = true; break; }
+        }
+        watcher.Dispose();
+
+        Assert(sawChange, "flood watcher applied created files (count " + countBefore + " -> " + index.Count + ")");
+        Assert(index.Count == countBefore + 601,
+            "flood added exactly 600 files + 1 dir (" + countBefore + " -> " + index.Count + ")");
+        Assert(Search(index, "f0001").Total == 1, "flood file searchable");
+        int rootIndex = index.FindDirectoryIndex(floodRoot);
+        Assert(rootIndex >= 0, "flood root still resolvable");
+        var rootRow = index.GetRow(rootIndex);
+        Assert(rootRow.IsDirectory && rootRow.Path.Length > 0,
+            "flood root intact (path=" + rootRow.Path + ")");
+
+        // 真实事故复现：watcher 偶尔把旧名字报空，OldFullPath 退化成索引根本身。
+        // 这类事件必须被忽略，而不是把整棵卷树删掉。
+        int countNow = index.Count;
+        Assert(index.ApplyChanges(new[] { FileChange.Renamed(floodRoot, Path.Combine(floodRoot, "ghost.txt")) }) == 0,
+            "rename event sourced at the index root is ignored");
+        Assert(index.Count == countNow,
+            "root-sourced rename keeps every entry (" + countNow + " -> " + index.Count + ")");
+        Assert(index.ApplyChanges(new[] { FileChange.Deleted(floodRoot) }) == 0,
+            "delete event targeting the index root is ignored");
+        Assert(index.Count == countNow,
+            "root-sourced delete keeps every entry (" + countNow + " -> " + index.Count + ")");
+        Assert(index.FindDirectoryIndex(floodRoot) == rootIndex,
+            "index root entry unchanged after hostile events");
+
+        index.Save(snap);
+        var reloaded = FileIndex.Load(snap, options);
+        Assert(reloaded != null && reloaded.Count == index.Count,
+            "flood snapshot round-trips (" + index.Count + " vs " + (reloaded?.Count ?? -1) + ")");
+        Assert(reloaded != null && reloaded.FindDirectoryIndex(floodRoot) >= 0,
+            "reloaded snapshot still resolves the root");
     }
 
     private static void RunIncremental(string root, FileIndex index)

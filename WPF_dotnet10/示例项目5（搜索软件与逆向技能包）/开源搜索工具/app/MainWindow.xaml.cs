@@ -3,6 +3,7 @@ using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -26,6 +27,8 @@ namespace IndexApp
 
         private HwndSource? _source;
         private FrameGapMonitor? _frameMonitor;
+        private bool _closeStarted;
+        private Task<bool>? _saveTask;
 
         public MainWindow()
         {
@@ -136,6 +139,20 @@ namespace IndexApp
             var helper = new WindowInteropHelper(this);
             if (helper.Handle != IntPtr.Zero) UnregisterHotKey(helper.Handle, HotkeyId);
             UI4Theme.ThemeChanged -= OnThemeChanged;
+
+            if (_saveTask != null)
+            {
+                // 窗口已经消失，这里最多再等 1.2s：等得到就干净退出，等不到就强制结束进程。
+                // 快照是「写 .tmp → Move」的原子替换，中途被杀最多是这次没存上，不会留下半份索引。
+                try
+                {
+                    if (!_saveTask.Wait(TimeSpan.FromMilliseconds(1200)) && !_saveTask.IsCompleted)
+                        Environment.Exit(0);
+                }
+                catch (AggregateException)
+                {
+                }
+            }
         }
 
         private void SettingsBtn_Click(object sender, RoutedEventArgs e)
@@ -385,7 +402,20 @@ namespace IndexApp
 
         private void MainWindow_Closing(object? sender, CancelEventArgs e)
         {
-            Vm?.Shutdown();
+            if (!_closeStarted)
+            {
+                // 第一次 Close() 一律拦下来：先播退场动画，同时把慢活（排空 watcher + 写快照）丢后台，
+                // 动画结束后再真正 Close()。在 UI 线程同步写 65 MB 快照就是「关闭卡一下」的成因。
+                _closeStarted = true;
+                e.Cancel = true;
+
+                var vm = Vm;
+                vm?.BeginShutdown();
+                _ = CloseWithAnimationAsync(vm);
+                return;
+            }
+
+            e.Cancel = false;
 
             var settings = App.Settings;
             if (settings == null) return;
@@ -408,6 +438,41 @@ namespace IndexApp
             }
 
             settings.Save();
+        }
+
+        private async Task CloseWithAnimationAsync(MainViewModel? vm)
+        {
+            if (vm != null && vm.IsIndexing)
+            {
+                // 全量构建/重建中途关窗：先给后台任务一个取消的机会，别让它和退出抢索引锁。
+                ClosingStatusText.Text = "正在取消后台任务…";
+                ClosingOverlay.Visibility = Visibility.Visible;
+                await Task.Delay(250);
+            }
+
+            ClosingStatusText.Text = "正在保存索引…";
+            ClosingOverlay.Visibility = Visibility.Visible;
+            if (vm != null) _saveTask = vm.FinishShutdownAsync();
+
+            var duration = TimeSpan.FromMilliseconds(170);
+            var fade = new DoubleAnimation(1d, 0d, duration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            };
+            var shrinkX = new DoubleAnimation(1d, 0.975d, duration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            };
+            var shrinkY = new DoubleAnimation(1d, 0.975d, duration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            };
+            RootGrid.BeginAnimation(OpacityProperty, fade);
+            RootScale.BeginAnimation(ScaleTransform.ScaleXProperty, shrinkX);
+            RootScale.BeginAnimation(ScaleTransform.ScaleYProperty, shrinkY);
+
+            await Task.Delay(200);
+            Close();
         }
 
         [DllImport("user32.dll", SetLastError = true)]
