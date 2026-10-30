@@ -18,7 +18,7 @@ import { createPortal } from 'react-dom';
 
 /* 控制条盒尺寸:5(内边距) + 34 + 4 + 34 + 4 + 34 + 5 = 120,高 5 + 34 + 5 = 44。
    clamp 用它,改 window-chrome.css 里的按钮尺寸/内边距/间距必须同步改这里,
-   否则窗口边缘附近右键会贴到屏幕外。scripts/check-wiring.mjs 会算这笔账。 */
+   否则窗口边缘附近右键会贴到屏幕外。 */
 const WIN_MENU_W = 120;
 const WIN_MENU_H = 44;
 
@@ -88,7 +88,7 @@ export default function WindowChrome({ rootSelector = '.window' }: { rootSelecto
       try {
         (e.target as Element).setPointerCapture?.(e.pointerId);
       } catch {
-        /* 合成 PointerEvent 没有真实 pointerId,捕获会抛 InvalidPointerId —— 验收探针就靠合成事件驱动 */
+        /* pointerId 无效或已释放时捕获会抛;捕获失败不影响拖拽主链,后续 pointermove 照样接手 */
       }
       api.dragStart();
     };
@@ -142,10 +142,9 @@ export default function WindowChrome({ rootSelector = '.window' }: { rootSelecto
   }, [menuAt]);
 
   /* 恢复:把退场留下的类摘掉,但**不**反向播。
-     实测 restore 之后头 ~160ms 渲染器不出帧(rAF 采样只有 4 个点、中间一个 164ms 空档),
-     那段"入场"到底有没有被呈现证明不了;而按计算值看它起始是 scale .64 / opacity .09,
-     真播出来很可能是一下近乎透明的窗口。所以这里用 window--noanim 把 transition 关掉
-     再摘类:恢复即时到位,与系统原本的行为一致。 */
+     恢复时窗口已经可见,反向播会先把它压回 scale .64 / opacity .09 的缩小半透明态,
+     观感是闪一下。所以这里用 window--noanim 把 transition 关掉再摘类:
+     恢复即时到位,与系统原本的行为一致。 */
   useEffect(() => {
     if (!api?.onRestore) return;
     const root = document.querySelector<HTMLElement>(rootSelector);

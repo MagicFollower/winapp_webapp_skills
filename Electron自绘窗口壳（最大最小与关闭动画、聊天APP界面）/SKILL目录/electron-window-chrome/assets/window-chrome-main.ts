@@ -34,7 +34,7 @@ const DRAG_GRAB_Y = 24;
 let dragAnchor: DragAnchor | null = null;
 let ipcInstalled = false;
 
-/** 位移公式单独抽出来,是为了让验收探针能拿合成数字验它本身 —— 真实光标不能替用户搬窗口。 */
+/** 位移公式单独抽出来:纯函数,不依赖窗口实例,宿主也可以拿它算贴边目标。 */
 export function dragTarget(a: DragAnchor, cx: number, cy: number, workTop: number) {
   let y = a.wy + (cy - a.cy);
   const hitTop = y < workTop;
